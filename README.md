@@ -56,7 +56,8 @@ the [Plants Lab](https://nlcsbiology.com/plants-lab/).
 **Pictures that tell the truth.** The particles are not told where to go. Each one moves at random, and a wall, a
 divider or a membrane lets it cross or not; the numbers on the screen are real counts of the crossings each way. Molecules
 and membranes are drawn at their true sizes beside each other wherever the picture says so, and the motion is slowed down
-many millions of times. The photographs are real micrographs, credited under the picture.
+many millions of times. The photographs are real micrographs, credited under the picture. The film of red dye in water is real footage, and its
+caption says what the film truly shows: the falling dye also moves the water, so that fast spreading is not diffusion alone.
 
 **Why the right answers are not in the page.** Each question carries a *scrambled fingerprint* of its answer. When a
 student answers, the page scrambles what they did in the same way and compares the two. Scrambling only works one way, so
@@ -81,7 +82,7 @@ correctly. The `tools/` named here stay on Daniel's computer: they are not in th
 node tools/build.mjs
 ```
 
-Picture credits: [`assets/photos/CREDITS.md`](assets/photos/CREDITS.md).
+Picture and film credits: [`assets/photos/CREDITS.md`](assets/photos/CREDITS.md).
 
 Pronunciation: the 🔊 UK and 🔊 US buttons beside the hard words play the Cambridge Dictionary's own recordings from its website (© Cambridge University Press & Assessment; nothing of theirs is stored here), with Wikimedia Commons recordings as the backup.
 

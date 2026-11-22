@@ -28,9 +28,9 @@
     bg.setAttribute('x', vb.x); bg.setAttribute('y', vb.y); bg.setAttribute('width', vb.w); bg.setAttribute('height', vb.h);
     return { f: f, vb: vb, narrow: narrow, to: function (x, y) { return [x, y]; } };
   }
-  /* a long name in a band breaks at its meaning ("sucrose solution" over "in the bag"), never in the middle of either part.
+  /* a long name in a band breaks at its meaning ("partially permeable" over "membrane"), never in the middle of either part.
      Only the drawing is tied: the scene's words stay plain, so the reading time still counts every word */
-  var FIRST_LINES = ['sucrose solution', 'outside the cell:', 'inside the cell:', 'partially permeable', 'water fills', 'air space', 'nitrate ions', 'cytoplasm of a'];
+  var FIRST_LINES = ['outside the cell:', 'inside the cell:', 'partially permeable', 'water fills', 'cytoplasm of a'];
   function tied(text) {
     var t = String(text), keep = function (x) { return x.replace(/ /g, '\u00A0'); };
     for (var i = 0; i < FIRST_LINES.length; i++) {
@@ -124,7 +124,8 @@
   }
 
   /* ---------- a station's left picture ----------
-     o = { scene, cls?, buttons?: [[id, label]], say(state)?, read?: [[key, label]], cL, cR, key? }
+     o = { scene, cls?, buttons?: [[id, label]], say(state)?, read?: [[key, label, icon?, words behind the icon?]], cL, cR,
+         key?: { all: [[kind, name], …], sets: [[name, …], …] (what each state shows), now() (the names shown now) } }
      returns { el, setButtons(id), repaint(), labels(), stage: ... } for a view to wrap in Views.add */
   function MemView(o) {
     var root = h('div', 'memv ' + (o.cls || ''));
@@ -144,12 +145,17 @@
     var model = document.createElementNS(K.NS, 'g'); svg.appendChild(model);
     var gLab = document.createElementNS(K.NS, 'g'); svg.appendChild(gLab);
     fig.appendChild(svg);
-    var read = h('div', 'memv__read');
+    var read = h('div', 'memv__read' + ((o.read || []).length < 3 ? ' memv__read--short' : ''));   /* two counters need one row on a laptop: the picture keeps that height */
+    /* the key: a drawn sample of each thing in the picture beside its name, only what the picture shows now
+       (Daniel, 22 Nov 2026: "add a key, okay, with the icons. It's more clear, and avoid repetition") */
+    var keyEl = o.key ? K.keyOf(o.key.all) : null, keyWas = null, keyW = 0;
+    if (keyEl) keyEl.classList.add('memv__key');
     root.appendChild(bar); root.appendChild(fig);
+    if (keyEl) root.appendChild(keyEl);
     if (o.read) root.appendChild(read);
     var pillEl = {};
     (o.read || []).forEach(function (p) {
-      var el = h('span', 'memv__pill', '<b>' + p[1] + '</b> <i></i>'); el.setAttribute('data-k', p[0]); pillEl[p[0]] = el; read.appendChild(el);
+      var el = h('span', 'memv__pill', '<b>' + p[1] + '</b> ' + (p[2] ? K.swatch(p[2]) + ' ' : '') + '<i></i>' + (p[3] ? '<span class="memv__vh"> ' + p[3] + '</span>' : '')); el.setAttribute('data-k', p[0]); pillEl[p[0]] = el; read.appendChild(el);
     });
     function pill(k, text, tone, label) {
       var el = pillEl[k]; if (!el) return;
@@ -159,16 +165,30 @@
     }
     var pk = h('ol', 'pinkey'); pk.hidden = true; root.appendChild(pk);
     var stage = attach(svg), lay = null, narrow = false, lastKey = '', running = false, raf = null, tsLast = null, scene = o.scene;
-    var namesT = 0;
+    var namesT = 0, pinW = 0, pinMax = 0;
 
+    function showKey(names) {
+      if (!keyEl) return;
+      var id = names.join('|'); if (id === keyWas) return; keyWas = id;
+      Array.prototype.forEach.call(keyEl.children, function (li) { li.hidden = names.indexOf(li.textContent) < 0; });
+    }
+    /* the key keeps the height of its fullest state, so the picture never jumps when an arrow appears */
+    function sizeKey() {
+      keyEl.style.minHeight = '';
+      var mx = 0;
+      o.key.sets.forEach(function (s) { showKey(s); mx = Math.max(mx, keyEl.offsetHeight); });
+      keyEl.style.minHeight = mx + 'px';
+      showKey(o.key.now());
+    }
     function layout() {
       var rw = fig.getBoundingClientRect().width, H0 = root.clientHeight; if (!rw || !H0) return false;
+      if (keyEl && Math.round(rw) !== keyW) { keyW = Math.round(rw); sizeKey(); }
       /* the counters and the key can take another row when the words change: the picture then makes room for them */
-      var key = Math.round(rw) + 'x' + Math.round(H0) + 'x' + (o.read ? read.offsetHeight : 0) + 'x' + (pk.hidden ? 0 : pk.offsetHeight);
+      var key = Math.round(rw) + 'x' + Math.round(H0) + 'x' + (o.read ? read.offsetHeight : 0) + 'x' + (pk.hidden ? 0 : pk.offsetHeight) + 'x' + (keyEl ? keyEl.offsetHeight : 0);
       if (key === lastKey && lay) return true;
       lastKey = key; narrow = rw < 440;
       var cs = global.getComputedStyle(root), pad = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom), gap = parseFloat(cs.rowGap) || 6;
-      var room = H0 - pad - (bar.hidden ? 0 : bar.offsetHeight + gap) - (o.read ? read.offsetHeight + gap : 0) - (pk.hidden ? 0 : pk.offsetHeight + gap);
+      var room = H0 - pad - (bar.hidden ? 0 : bar.offsetHeight + gap) - (keyEl ? keyEl.offsetHeight + gap : 0) - (o.read ? read.offsetHeight + gap : 0) - (pk.hidden ? 0 : pk.offsetHeight + gap);
       lay = frame(svg, bg, scene.W, scene.H, rw, narrow, 14);
       var want = rw * lay.vb.h / lay.vb.w;
       /* on a phone the picture scrolls with the page, whatever its height; in a column it fits the room there is */
@@ -186,9 +206,16 @@
         return it;
       });
       gLab.innerHTML = putNames(lay, items, narrow, pk);
+      /* the numbered names keep the height of their fullest state at this width, so the picture does not jump between buttons */
+      if (!pk.hidden) {
+        var w = Math.round(fig.getBoundingClientRect().width);
+        if (w !== pinW) { pinW = w; pinMax = 0; pk.style.minHeight = ''; }
+        pinMax = Math.max(pinMax, pk.offsetHeight); pk.style.minHeight = pinMax + 'px';
+      }
     }
     function paint() {
       var was = lastKey;
+      if (keyEl) showKey(o.key.now());
       if (!layout()) return;
       var c = stage.begin(); if (c) scene.draw(c, lay);
       if (scene.read) scene.read(pill);

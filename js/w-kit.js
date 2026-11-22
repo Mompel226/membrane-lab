@@ -152,7 +152,7 @@
   function shell(spec, cls, title, aria, pills) {
     var box = h('div', 'widget ' + cls);
     box.appendChild(L.head(spec.title || title, spec.ask, 'Press play'));
-    var read = h('div', cls + '__read', pills.map(function (p) { return '<span class="' + cls + '__pill" data-k="' + p[0] + '"><b>' + p[1] + '</b> <i></i></span>'; }).join(''));
+    var read = h('div', cls + '__read', pills.map(function (p) { return '<span class="' + cls + '__pill" data-k="' + p[0] + '"><b>' + p[1] + '</b> ' + (p[2] ? swatch(p[2]) + ' ' : '') + '<i></i>' + (p[3] ? '<span class="memv__vh"> ' + p[3] + '</span>' : '') + '</span>'; }).join(''));
     var fig = h('figure', cls + '__fig');
     var svg = document.createElementNS(NS, 'svg');
     svg.setAttribute('class', cls + '__svg'); svg.setAttribute('role', 'img'); svg.setAttribute('aria-label', aria);
@@ -202,11 +202,13 @@
     lipid: '<circle fill="#E9B66D" cx="6" cy="7" r="4.2"/><path stroke="#F7E7C4" stroke-width="1.4" fill="none" d="M9.5 5.3C14 4 18 6.6 25 5.4M9.5 8.7C14 10.2 18 7.6 25 9.3"/>',
     carrier: '<path fill="#37D3B0" d="M4 7C4 3.2 9 1.5 14 1.5S24 3.2 24 7c-3.5-.9-6.5-1.1-10-1.1S7.5 6.1 4 7z"/><path fill="#22A98D" d="M4 7c0 3.8 5 5.5 10 5.5S24 10.8 24 7c-3.5.9-6.5 1.1-10 1.1S7.5 7.9 4 7z"/>',
     energy: '<circle fill="#FFE680" cx="14" cy="7" r="5"/><circle fill="#FFF7CF" cx="14" cy="7" r="2.3"/>',
+    hbond: '<path fill="none" stroke="#D6F0FF" stroke-width="1.7" stroke-dasharray="2.6 2.6" d="M3 7H25"/>',
     /* the arrows: the net movement (one wide arrow), and the crossings each way (two thin ones) */
     press: '<path fill="#B7193F" stroke="#FFFFFF" stroke-width=".7" d="M2 5.7h14V2.3L26 7l-10 4.7V8.3H2z"/>',
     net: '<path fill="#FFF3C4" stroke="#0E1D2E" stroke-width=".8" d="M2 5h15V1.6L26 7l-9 5.4V9H2z"/>',
     ways: '<path fill="#FFFFFF" d="M3 3h17V.8L26 4l-6 3.2V5H3z"/><path fill="#FFFFFF" d="M25 10.4H9v1.8L3 9.5l6-2.7v1.8h16z"/>'
   };
+  function swatch(kind) { return '<svg class="anikey__sw" viewBox="0 0 28 14" aria-hidden="true">' + SW[kind] + '</svg>'; }
   function keyOf(items) {
     var ul = h('ul', 'figkey anikey');
     ul.innerHTML = items.map(function (q) {
@@ -299,6 +301,6 @@
 
 
   global.WKit = { pinKey: pinKey, names: names, margins: margins, n1: n1, seg: seg, ease: ease, clamp01: clamp01, lerp: lerp, len: len, rng: rng, fitType: fitType,
-                  sw: SW, timeline: timeline, readerSteps: readerSteps, stillsOf: stillsOf, itemsOf: itemsOf, namesWait: namesWait, frameOf: frameOf, drawLabels: drawLabels, shell: shell,
+                  sw: SW, keyOf: keyOf, swatch: swatch, timeline: timeline, readerSteps: readerSteps, stillsOf: stillsOf, itemsOf: itemsOf, namesWait: namesWait, frameOf: frameOf, drawLabels: drawLabels, shell: shell,
                   mount: mount, NS: NS };
 })(window);

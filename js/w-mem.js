@@ -44,7 +44,7 @@
   L.add('diffusionfilm', Film({
     title: 'Diffusion, step by step',
     aria: 'Scent particles and air particles move at random in two boxes of equal volume. A divider is lifted, the scent spreads, and the two concentrations become equal.',
-    pills: [['l', 'Left box:'], ['r', 'Right box:'], ['n', 'Net movement:']],
+    pills: [['l', 'Left box:', 'scent', 'scent particles'], ['r', 'Right box:', 'scent', 'scent particles'], ['n', 'Net movement:']],
     key: [['scent', 'scent particle'], ['air', 'air particle'], ['net', 'net movement', [2]], ['ways', 'crossing each way', [3]]],
     M: [0, 6, 11, 21, 31],
     steps: [
@@ -129,8 +129,8 @@
         },
         read: function (t, pill) {
           var n = sim.count('scent'), x = sim.crossed('scent');
-          pill('l', n[0] + ' scent particles', n[0] > n[1] + 3 ? 'warn' : 'ok');
-          pill('r', n[1] + ' scent particles', n[0] > n[1] + 3 ? 'warn' : 'ok');
+          pill('l', String(n[0]), n[0] > n[1] + 3 ? 'warn' : 'ok');
+          pill('r', String(n[1]), n[0] > n[1] + 3 ? 'warn' : 'ok');
           pill('n', t < 9 ? 'none yet' : t >= 21 ? 'about zero now' : '→ ' + Math.max(0, x.net) + (x.net === 1 ? ' particle' : ' particles') + ' so far', t >= 21 ? 'ok' : 'warn');
         }
       });

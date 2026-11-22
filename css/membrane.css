@@ -348,7 +348,8 @@ p,li,dd,figcaption{text-wrap:pretty}
 .rstep[aria-current="true"] .rstep__n{background:rgba(255,255,255,.12)}
 .memv{flex:1;min-height:0;display:flex;flex-direction:column;justify-content:center;gap:6px;padding:8px 10px}
 /* the counters keep their height, so the picture never jumps when one of them wraps to a second row */
-.memv__read{flex:none;min-height:56px;align-content:flex-start}
+.memv__read{flex:none;min-height:60px;align-content:flex-start}
+@media (min-width:1181px){ .memv__read--short{min-height:30px} }
 .memv__bar{padding:0;justify-content:center}
 .memv__bar[hidden]{display:none}
 .memv__btn{font:inherit;font-size:13px;font-weight:600;padding:6px 12px;border-radius:var(--r-pill);cursor:pointer;
@@ -361,6 +362,17 @@ p,li,dd,figcaption{text-wrap:pretty}
 .memv__read{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
 /* a sample of each particle in an animation's key, on the dark ground of the pictures */
 .anikey__sw{background:#10263A;border-radius:4px}
+/* the key of a station's left picture, under it; an icon in a counter says what is counted */
+.memv__key{flex:none;margin:2px 4px 0;justify-content:center;align-content:center}
+.memv__pill .anikey__sw,.mf__pill .anikey__sw{display:inline-block;width:22px;height:11px;vertical-align:-1px}
+.memv__vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+/* the real film is square: on a wide card it stands beside its caption, so the sentence, the film and the caption
+   are seen together on a laptop, with no black bars (22 Nov 2026) */
+@media (min-width:600px) and (max-width:1000px),(min-width:1181px){
+  .exam-list li.xcard .media--video{display:grid;grid-template-columns:minmax(0,55%) minmax(0,1fr);background:var(--card)}
+  .exam-list li.xcard .media--video .media__el{max-height:none;aspect-ratio:1/1;align-self:center}
+  .exam-list li.xcard .media--video .media__cap{border-top:0;border-left:1px solid var(--edge-2);align-content:center}
+}
 /* the plant that wilts (station 7) */
 .mf-plant__wrap{display:grid;grid-template-columns:minmax(0,1fr);gap:6px}
 .mf-plant__cv{display:block;width:100%;max-width:440px;margin:0 auto;aspect-ratio:340/240}

@@ -101,15 +101,21 @@
       },
       read: function (pill) {
         var n = sim.count('scent'), x = sim.crossed('scent');
-        pill('l', many(n[0], 'scent particle'), n[0] > n[1] + 3 ? 'warn' : 'ok');
-        pill('r', many(n[1], 'scent particle'), n[0] > n[1] + 3 ? 'warn' : 'ok');
+        pill('l', String(n[0]), n[0] > n[1] + 3 ? 'warn' : 'ok');
+        pill('r', String(n[1]), n[0] > n[1] + 3 ? 'warn' : 'ok');
         pill('n', !lifted ? 'none yet' : dv.bal ? 'about zero now' : '→ ' + many(Math.max(0, x.net), 'particle') + ' so far', dv.bal ? 'ok' : 'warn');
       }
     };
     var V = MV({
       scene: scene, aria: 'Two boxes of equal volume with a divider between them. Scent particles are in the left box; when the divider is lifted they spread until the two concentrations are equal.',
       barLabel: 'The divider', buttons: [['go', 'Lift the divider'], ['reset', 'Start again']],
-      read: [['l', 'Left box:'], ['r', 'Right box:'], ['n', 'Net movement:']],
+      read: [['l', 'Left box:', 'scent', 'scent particles'], ['r', 'Right box:', 'scent', 'scent particles'], ['n', 'Net movement:']],
+      key: { all: [['scent', 'scent particle'], ['air', 'air particle'], ['net', 'net movement'], ['ways', 'crossing each way']],
+             sets: [['scent particle', 'air particle', 'net movement'], ['scent particle', 'air particle', 'crossing each way']],
+             now: function () {
+               var a = ['scent particle', 'air particle'], n = sim.count('scent');
+               return dv.bal ? a.concat('crossing each way') : lifted && n[0] > n[1] + 2 ? a.concat('net movement') : a;
+             } },
       onButton: function (id) { if (id === 'go') { lift(); ctx.pick('net', { stay: true }); } else { reset(); } sync(); }
     });
     /* with Reduce motion nothing moves, so the press shows at once what the moving picture reaches */
@@ -117,7 +123,7 @@
     function sync() { settle(); V.button('go').disabled = lifted; V.names(); V.paint(); }
     return {
       el: V.el, start: function () { V.start(); sync(); }, stop: V.stop,
-      say: 'Two boxes of the same volume: pink scent particles spread at random among grey air particles',
+      say: 'Two boxes of the same volume: the particles move at random',
       credit: 'Particles drawn for this lab. They are shown many millions of times slower than in reality.',
       focus: function (part) {
         foc = part || null;
@@ -202,7 +208,10 @@
     var V = MV({
       scene: scene, aria: 'A cell membrane with molecules crossing it in both directions. There are more on one side, so there is a net movement to the other.',
       barLabel: 'Which cell', buttons: [['oxygen', 'Oxygen into a root hair cell'], ['urea', 'Urea out of a liver cell']],
-      read: [['a', 'Crossing into the cell:'], ['b', 'Crossing out of the cell:'], ['n', 'Net movement:']],
+      read: [['a', 'Into the cell:'], ['b', 'Out of the cell:'], ['n', 'Net movement:']],
+      key: { all: [['oxygen', 'oxygen molecule'], ['urea', 'urea molecule'], ['lipid', 'lipid of the cell membrane'], ['net', 'net movement']],
+             sets: [['oxygen molecule', 'lipid of the cell membrane', 'net movement'], ['urea molecule', 'lipid of the cell membrane', 'net movement']],
+             now: function () { var a = [mode + ' molecule', 'lipid of the cell membrane']; return shownNet[mode] ? a.concat('net movement') : a; } },
       onButton: function (id) { ctx.pick(id, { stay: true }); }
     });
     function show(m) { mode = m; if (V.isStill() && sims[m].t < 8) { var n = 60 * 10; while (n-- > 0) sims[m].step(); } V.press(m); V.names(); V.paint(); }
@@ -280,6 +289,7 @@
       scene: scene, aria: 'Two boxes side by side, each with a doorway in a wall. They differ in one factor; the box with the faster diffusion has more particles across its wall.',
       barLabel: 'Which factor', buttons: [['temp', 'Temperature'], ['grad', 'Gradient'], ['area', 'Surface area'], ['dist', 'Distance'], ['run', 'Run again']],
       read: [['a', 'Net movement:'], ['b', 'Net movement:'], ['c', 'Time:']],
+      key: { all: [['scent', 'scent particle']], sets: [['scent particle']], now: function () { return ['scent particle']; } },
       onButton: function (id) { if (id === 'run') { go++; build(); ran(); V.names(); V.paint(); } else ctx.pick(id, { stay: true }); }
     });
     function ran() { if (V.isStill()) { var n = 60 * END; while (n-- > 0) { sims[0].step(); sims[1].step(); } t = END; } }
@@ -353,27 +363,26 @@
           });
         });
       },
-      labels: function () {
-        var it = [], list = SOL[mode], names = { glucose: 'glucose molecule', urea: 'urea molecule', mg: 'magnesium ion' }, seen = {};
-        list.forEach(function (q) {
-          if (seen[q.k]) return; seen[q.k] = 1;
-          var p = at(q, t);
-          it.push({ id: q.k, text: names[q.k], x: p[0], y: p[1] - q.r * .35, side: 'T' });
-        });
-        it.push({ id: 'w', text: 'water molecule', x: W - 90, y: H - 18, side: 'B' });
-        return it;
-      }
+      labels: function () { return []; }   /* the key names each particle */
     };
+    var SOLUTE = { glucose: 'glucose molecule', urea: 'urea molecule', mg: 'magnesium ion' };
     var V = MV({
-      scene: scene, liveNames: true, aria: 'Water molecules touching each other, with dashed hydrogen bonds. Each dissolved particle is surrounded by a shell of water molecules.',
+      scene: scene, aria: 'Water molecules touching each other, with dashed hydrogen bonds. Each dissolved particle is surrounded by a shell of water molecules.',
       barLabel: 'Where', buttons: [['digestion', 'Digestion'], ['excretion', 'Excretion'], ['transport', 'Transport']],
+      key: { all: [['water', 'water molecule'], ['glucose', 'glucose molecule'], ['urea', 'urea molecule'], ['mg', 'magnesium ion'], ['hbond', 'hydrogen bond']],
+             sets: [['water molecule', 'glucose molecule', 'hydrogen bond'], ['water molecule', 'urea molecule', 'hydrogen bond'], ['water molecule', 'glucose molecule', 'urea molecule', 'magnesium ion', 'hydrogen bond']],
+             now: function () {
+               var out = ['water molecule'];
+               SOL[mode].forEach(function (q) { if (out.indexOf(SOLUTE[q.k]) < 0) out.push(SOLUTE[q.k]); });
+               return out.concat('hydrogen bond');
+             } },
       onButton: function (id) { ctx.pick(id, { stay: true }); }
     });
     function show(m) { mode = m; V.press(m); V.names(); V.paint(); }
     return {
       el: V.el, start: function () { V.start(); show(mode); }, stop: V.stop,
       say: 'Water surrounds each dissolved particle and carries it',
-      credit: 'Water molecules and solutes at their true sizes. The dashed lines are hydrogen bonds, which break and form all the time.',
+      credit: 'Water molecules and solutes at their true sizes. Hydrogen bonds break and form all the time.',
       focus: function (part) { show(part && part !== 'solution' ? part : 'solution'); }
     };
   });
@@ -425,6 +434,9 @@
       scene: scene, aria: 'A partially permeable membrane between two solutions that start with equal volumes. Water molecules cross in both directions; sucrose molecules cannot cross.',
       barLabel: 'The two solutions', buttons: [['diff', 'Dilute and concentrated'], ['same', 'The same solution on both sides']],
       read: [['a', 'Water crossing →'], ['b', 'Water crossing ←'], ['n', 'Net movement:']],
+      key: { all: [['water', 'water molecule'], ['sucrose', 'sucrose molecule'], ['lipid', 'lipid of the membrane'], ['net', 'net movement of water'], ['ways', 'crossing each way']],
+             sets: [['water molecule', 'sucrose molecule', 'lipid of the membrane', 'net movement of water'], ['water molecule', 'sucrose molecule', 'lipid of the membrane', 'crossing each way']],
+             now: function () { return ['water molecule', 'sucrose molecule', 'lipid of the membrane', same ? 'crossing each way' : 'net movement of water']; } },
       onButton: function (id) { same = id === 'same'; warm(); V.press(id); V.names(); V.paint(); }
     });
     function warm() { var q = cur(); if (V.isStill() && q.t < 8) { var n = 60 * 10; while (n-- > 0) q.step(); } }
@@ -516,8 +528,8 @@
         var Pn = D.bagPath({ L: 214, r: 42, full: full }), e = edgeAt(Pn, -64), m = midAt(Pn, 16);
         return [{ id: 'tub', text: 'dialysis tubing', x: bx - 64, y: by + e[1], side: 'T' },
                 { id: 'gap', text: 'close-up of the tubing', x: LX, y: LY - LR + 4, side: 'T' },
-                { id: 'in', text: inside + ' in the bag', x: bx + 16, y: by + m, side: 'B' },
-                { id: 'ar', text: around + ' in the beaker', x: B.x + 48, y: B.y + B.h - 22, side: 'B' },
+                { id: 'in', text: inside, x: bx + 16, y: by + m, side: 'B' },
+                { id: 'ar', text: around, x: B.x + 48, y: B.y + B.h - 22, side: 'B' },
                 { id: 'lb', text: 'bag', x: LX - 52, y: LY + LR * .78, side: 'B' },
                 { id: 'lo', text: 'beaker', x: LX + 52, y: LY + LR * .78, side: 'B' }];
       },
@@ -531,6 +543,9 @@
       scene: scene, liveNames: true, aria: 'A tied bag of dialysis tubing in a beaker. In water a bag of sucrose solution swells and becomes firm; a bag of water in sucrose solution becomes soft.',
       barLabel: 'What is in the bag and the beaker', buttons: [['in', 'Sucrose solution in the bag'], ['out', 'Water in the bag'], ['same', 'The same solution in both']],
       read: [['w', 'Net movement of water:'], ['b', 'The bag:']],
+      key: { all: [['water', 'water molecule'], ['sucrose', 'sucrose molecule'], ['net', 'net movement of water']],
+             sets: [['water molecule', 'sucrose molecule', 'net movement of water']],
+             now: function () { var a = ['water molecule', 'sucrose molecule']; return SET[setup].net && Math.abs(full - target) > .004 ? a.concat('net movement of water') : a; } },
       onButton: function (id) { ctx.pick(id, { stay: true }); }
     });
     function show(k, restart) {
@@ -605,6 +620,7 @@
       scene: scene, liveNames: true, aria: 'A plant cell and an animal cell in the same liquid. In pure water the plant cell becomes turgid and the animal cell swells and bursts; in a concentrated solution the plant cell is plasmolysed and the animal cell shrinks.',
       barLabel: 'The liquid', buttons: [['water', 'In pure water'], ['conc', 'In a concentrated solution']],
       read: [['s', 'Liquid:'], ['p', 'Plant cell:'], ['a', 'Animal cell:']],
+      key: { all: [['net', 'net movement of water']], sets: [['net movement of water']], now: function () { return k < 1 ? ['net movement of water'] : []; } },
       onButton: function (id) { set(id); }
     });
     function set(id) { liquid = id; k = V.isStill() ? 1 : 0; V.press(id); V.names(); V.paint(); }
@@ -691,6 +707,8 @@
       scene: scene, aria: 'A protein carrier in a cell membrane moves nitrate ions from the side of lower concentration to the side of higher concentration, using energy from a mitochondrion.',
       barLabel: 'Respiration', buttons: [['on', 'Respiration on'], ['off', 'Stop respiration']],
       read: [['m', 'Moved against the gradient:'], ['r', 'Respiration:'], ['c', 'Carrier:']],
+      key: { all: [['nitrate', 'nitrate ion'], ['energy', 'energy from respiration']], sets: [['nitrate ion', 'energy from respiration']],
+             now: function () { return scene.isOn() ? ['nitrate ion', 'energy from respiration'] : ['nitrate ion']; } },
       onButton: function (id) { scene.setOn(id === 'on'); V.press(id); V.names(); V.paint(); if (id === 'off') ctx.pick('energy', { stay: true }); }
     });
     var warmed = false;
@@ -775,10 +793,10 @@
       labels: function () {
         var it = [{ id: 'car', text: 'protein carrier', x: MC, y: GATES[0] - 16, side: 'T' },
                   { id: 'mi', text: 'mitochondrion', x: 452, y: 72, side: 'T' },
-                  { id: 'ion', text: 'nitrate ions in soil water', x: ions.length ? ions[0].x : 150, y: 322, side: 'B' },
+                  { id: 'ion', text: 'soil water', x: ions.length ? ions[0].x : 150, y: 322, side: 'B' },
                   { id: 'wall', text: 'cell wall', x: 280, y: 322, side: 'B' },
                   { id: 'mem', text: 'cell membrane', x: MC + 18, y: 322, side: 'B' }];
-        it.push(mode === 'air' ? { id: 'air', text: 'air space with oxygen', x: 96, y: 78, side: 'T' } : { id: 'air', text: 'water fills the air spaces', x: 96, y: 78, side: 'T' });
+        it.push(mode === 'air' ? { id: 'air', text: 'air space', x: 96, y: 78, side: 'T' } : { id: 'air', text: 'water fills the air spaces', x: 96, y: 78, side: 'T' });
         return it;
       },
       read: function (pill) {
@@ -792,6 +810,8 @@
       scene: scene, aria: 'The edge of a root hair cell in the soil. Protein carriers move nitrate ions into the cell, water enters by osmosis, and mitochondria release energy using oxygen from the air spaces.',
       barLabel: 'The soil', buttons: [['air', 'Soil with air spaces'], ['wet', 'Waterlogged soil']],
       read: [['o', 'Oxygen in the soil:'], ['r', 'Respiration:'], ['i', 'Ions absorbed:']],
+      key: { all: [['nitrate', 'nitrate ion'], ['water', 'water molecule'], ['oxygen', 'oxygen molecule']], sets: [['nitrate ion', 'water molecule', 'oxygen molecule']],
+             now: function () { return mode === 'wet' ? ['nitrate ion', 'water molecule'] : ['nitrate ion', 'water molecule', 'oxygen molecule']; } },
       onButton: function (id) { mode = id; V.press(id); V.names(); V.paint(); if (id === 'wet') ctx.pick('oxygen', { stay: true }); }
     });
     return {
@@ -848,6 +868,10 @@
       scene: scene, aria: 'One cell membrane showing diffusion, osmosis or active transport, with the arrow showing the direction of movement.',
       barLabel: 'Which process', buttons: [['diff', 'Diffusion'], ['osmo', 'Osmosis'], ['actv', 'Active transport']],
       read: [['m', 'What moves:'], ['d', 'Direction:'], ['e', 'Energy from respiration:']],
+      key: { all: [['oxygen', 'oxygen molecule'], ['water', 'water molecule'], ['sucrose', 'sucrose molecule'], ['nitrate', 'nitrate ion'], ['energy', 'energy from respiration'],
+                   ['net', 'net movement'], ['net', 'net movement of water'], ['net', 'movement against the gradient']],
+             sets: [['oxygen molecule', 'net movement'], ['water molecule', 'sucrose molecule', 'net movement of water'], ['nitrate ion', 'energy from respiration', 'movement against the gradient']],
+             now: function () { return this.sets[mode === 'diff' ? 0 : mode === 'osmo' ? 1 : 2]; } },
       onButton: function (id) { ctx.pick(id, { stay: true }); }
     });
     function show(m) { mode = m; if (V.isStill()) { if (m === 'actv') { var a = 60 * 8; while (a-- > 0) car.tick(1 / 60); } else if (sims[m].t < 8) { var n = 60 * 10; while (n-- > 0) sims[m].step(); } } V.press(m); V.names(); V.paint(); }
