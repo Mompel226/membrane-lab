@@ -37,6 +37,8 @@
     head: ['#FFE9C4', '#E9B66D', '#A87533'], tail: 'rgba(247,231,196,.62)', core: 'rgba(120,92,54,.28)',
     /* the protein carrier */
     car: ['#BDF7E9', '#37D3B0', '#0D7A65'],
+    /* a channel protein: blue, so it is never taken for a carrier */
+    chan: ['#BFE6FB', '#4FA8DE', '#1B5F8E'],
     energy: '#FFE680',
     /* the cell */
     wall0: '#B9D88F', wall1: '#7FA858', wallLo: '#54773A', fibre: 'rgba(240,250,214,.5)',
@@ -125,6 +127,57 @@
     c.save(); rr(c, x, y, w, h, r); c.strokeStyle = C.edge; c.lineWidth = 1.2; c.stroke(); c.restore();
   }
 
+  /* ---------- a concentration as a colour: blue for a lower concentration, grey half way, red for a higher one
+     (Daniel, 25 Nov 2026: "It should be color-coded, higher and lower. Higher maybe being red and lower being blue") ---------- */
+  var HEAT = [[76, 157, 255], [150, 156, 170], [255, 92, 77]];
+  function heat(k, a) {
+    /* within a tenth of half way it is the grey of "equal": a few particles more here or there are not a gradient */
+    var d = k - .5; k = .5 + (d < 0 ? -1 : 1) * Math.max(0, Math.abs(d) - .1) / .8;
+    k = clamp(k);
+    var j = k < .5 ? 0 : 1, f = k < .5 ? k * 2 : k * 2 - 1, p = HEAT[j], q = HEAT[j + 1];
+    return 'rgba(' + Math.round(lerp(p[0], q[0], f)) + ',' + Math.round(lerp(p[1], q[1], f)) + ',' + Math.round(lerp(p[2], q[2], f)) + ',' + (a == null ? 1 : a) + ')';
+  }
+  /* the ground of a picture, coloured by the concentration under each place, so a gradient is seen as red fading to blue */
+  function heatTint(c, x0, y0, w, h, P, a) {
+    var lg = c.createLinearGradient(x0, 0, x0 + w, 0);
+    P.xs.forEach(function (x, i) { lg.addColorStop(clamp(x / P.w), heat(P.values[i], a)); });
+    c.fillStyle = lg; c.fillRect(x0, y0, w, h);
+  }
+  /* a graph of that concentration, under the picture: concentration up, the place across, the curve filled in the colours
+     of its values. P: a profile (MemSim.profile); g = { x, y, w, h, mid?: the x of the dashed middle, max? }.
+     It returns the curve's points and its base line, so that an arrow or a name can find the slope. */
+  function concGraph(c, P, g) {
+    var base = g.y + g.h - 10, top = g.y + 14, mx = g.max || 1.15, sc = (base - top) / mx, L = g.x + 7, R = g.x + g.w - 7;
+    var pts = P.xs.map(function (x, i) { return [lerp(L, R, x / P.w), base - Math.min(mx, Math.max(0, P.values[i])) * sc]; });
+    frame(c, g.x, g.y, g.w, g.h, 10, function () {
+      ground(c, g.x, g.y, g.w, g.h, '#152330', '#0F1A24');
+      if (g.mid != null) {
+        var xm = lerp(L, R, g.mid / P.w);
+        c.strokeStyle = 'rgba(190,220,245,.35)'; c.lineWidth = 1; c.setLineDash([3, 5]);
+        c.beginPath(); c.moveTo(xm, g.y); c.lineTo(xm, g.y + g.h); c.stroke(); c.setLineDash([]);
+      }
+      var lg = c.createLinearGradient(L, 0, R, 0);
+      P.xs.forEach(function (x, i) { lg.addColorStop(clamp(x / P.w), heat(P.values[i], .85)); });
+      c.beginPath(); c.moveTo(L, base); pts.forEach(function (p) { c.lineTo(p[0], p[1]); }); c.lineTo(R, base); c.closePath();
+      c.fillStyle = lg; c.fill();
+      c.strokeStyle = '#FFFFFF'; c.lineWidth = 2; c.lineJoin = 'round';
+      c.beginPath(); pts.forEach(function (p, i) { c[i ? 'lineTo' : 'moveTo'](p[0], p[1]); }); c.stroke();
+      c.strokeStyle = 'rgba(224,236,246,.75)'; c.lineWidth = 1.3;
+      c.beginPath(); c.moveTo(L, top - 8); c.lineTo(L, base); c.lineTo(R, base); c.stroke();
+    });
+    return { pts: pts, base: base, top: top, L: L, R: R };
+  }
+  /* the slope of that graph, from the higher concentration down to the lower: { a: [x, y], b: [x, y] }, or null if it is flat */
+  function slopeOf(G, P) {
+    var v = P.values, mx = -1e9, mn = 1e9, i, a = -1, b = -1;
+    for (i = 0; i < v.length; i++) { mx = Math.max(mx, v[i]); mn = Math.min(mn, v[i]); }
+    if (mx - mn < .45) return null;          /* the ups and downs of a few particles are not a slope */
+    for (i = 0; i < v.length; i++) if (v[i] >= mn + .8 * (mx - mn)) a = i;
+    for (i = a + 1; i < v.length; i++) if (v[i] <= mn + .2 * (mx - mn)) { b = i; break; }
+    if (a < 0 || b < 0 || b - a < 1) return null;
+    return { a: G.pts[a], b: G.pts[b] };
+  }
+
   /* ---------- a movement arrow: one filled shape, a fixed head, the shaft as wide as the rate
      (memory concentration-pictures-equal-volumes: "never line arrows, whose heads scale with the line width") ---------- */
   function arrow(c, x0, y0, x1, y1, w, fill, o) {
@@ -180,14 +233,16 @@
 
   /* ---------- a protein carrier, seen cut through, across a membrane ----------
      Two halves round a pocket. `open` 0: the pocket faces the left; 1: it faces the right; the halves swing, the protein
-     does not move. `glow` is the energy from respiration, shown as light at the moment the shape changes. */
+     does not move. A carrier is never an open tube (that is a channel): the side the pocket does not face is SHUT, and
+     halfway through the change both sides are shut, with the ion held inside. `glow` is the energy from respiration,
+     shown as light at the moment the shape changes. */
   function carrier(c, x, y, u, open, glow) {
-    var hw = 3.05 * u, hh = 2.5 * u, gap = .62 * u, gL = lerp(gap, .1 * u, ease(open)), gR = lerp(.1 * u, gap, ease(open));
+    var hw = 3.05 * u, hh = 2.5 * u, gap = .86 * u, k = ease(open), gL = gap * clamp(1 - 2 * k), gR = gap * clamp(2 * k - 1);
     function half(sgn) {
       c.beginPath();
       c.moveTo(x - hw, y + sgn * gL);
-      c.bezierCurveTo(x - hw * .55, y + sgn * (gL * .9 + .15 * u), x - hw * .18, y + sgn * (.52 * u), x, y + sgn * (.56 * u));
-      c.bezierCurveTo(x + hw * .18, y + sgn * (.52 * u), x + hw * .55, y + sgn * (gR * .9 + .15 * u), x + hw, y + sgn * gR);
+      c.bezierCurveTo(x - hw * .6, y + sgn * gL, x - hw * .22, y + sgn * (.5 * u), x, y + sgn * (.56 * u));
+      c.bezierCurveTo(x + hw * .22, y + sgn * (.5 * u), x + hw * .6, y + sgn * gR, x + hw, y + sgn * gR);
       c.bezierCurveTo(x + hw * 1.08, y + sgn * (hh * .6), x + hw * .78, y + sgn * hh, x + hw * .38, y + sgn * hh);
       c.bezierCurveTo(x + hw * .12, y + sgn * (hh * 1.09), x - hw * .12, y + sgn * (hh * 1.09), x - hw * .38, y + sgn * hh);
       c.bezierCurveTo(x - hw * .78, y + sgn * hh, x - hw * 1.08, y + sgn * (hh * .6), x - hw, y + sgn * gL);
@@ -213,6 +268,35 @@
         rg.addColorStop(0, 'rgba(255,226,120,' + (.55 * glow).toFixed(3) + ')'); rg.addColorStop(1, 'rgba(255,226,120,' + (.08 * glow).toFixed(3) + ')');
         c.fillStyle = rg; c.fillRect(x - hw * 1.2, y - hh * 1.2, hw * 2.4, hh * 2.4); c.restore();
       }
+    });
+  }
+
+  /* ---------- a channel protein, seen cut through, across a membrane ----------
+     Two halves round a narrow pore that is open at BOTH ends: a particle passes through in single file, by diffusion, with
+     no energy. o: { hh: half its height, mouth: half the width of the pore at its ends, pore: at its waist }, in nanometres. */
+  function channel(c, x, y, u, o) {
+    o = o || {};
+    var hw = 2.72 * u, hh = (o.hh || .98) * u, m = (o.mouth || .52) * u, p = (o.pore || .17) * u, r = Math.min(hh - m, .34 * u);
+    /* one barrel across the membrane, cut through: its two walls, and the pore between them, narrow at the waist */
+    function half(sgn) {
+      c.beginPath();
+      c.moveTo(x - hw, y + sgn * m);
+      c.bezierCurveTo(x - hw * .6, y + sgn * m, x - hw * .32, y + sgn * p, x, y + sgn * p);
+      c.bezierCurveTo(x + hw * .32, y + sgn * p, x + hw * .6, y + sgn * m, x + hw, y + sgn * m);
+      c.lineTo(x + hw, y + sgn * (hh - r));
+      c.quadraticCurveTo(x + hw, y + sgn * hh, x + hw - r, y + sgn * hh);
+      c.lineTo(x - hw + r, y + sgn * hh);
+      c.quadraticCurveTo(x - hw, y + sgn * hh, x - hw, y + sgn * (hh - r));
+      c.closePath();
+    }
+    /* the pore is full of water, so no lipid shows through it */
+    c.fillStyle = C.water1; c.fillRect(x - hw, y - m - 1, 2 * hw, 2 * m + 2);
+    [-1, 1].forEach(function (s) {
+      half(s);
+      var lg = c.createLinearGradient(x, y + s * hh, x, y + s * p);
+      lg.addColorStop(0, C.chan[1]); lg.addColorStop(.55, C.chan[1]); lg.addColorStop(1, C.chan[2]);
+      c.fillStyle = lg; c.fill();
+      c.strokeStyle = C.chan[0]; c.lineWidth = Math.max(.7, .07 * u); c.stroke();
     });
   }
 
@@ -305,6 +389,7 @@
     c.closePath();
   }
 
+  function polyArea(pts) { var a = 0; for (var i = 0, j = pts.length - 1; i < pts.length; j = i++) a += (pts[j][0] + pts[i][0]) * (pts[j][1] - pts[i][1]); return Math.abs(a / 2); }
   /* a point inside the cell membrane, at least `gap` from it: moved towards the middle of the cell until it is, so that
      nothing inside the cell ever lies across its membrane, however far the cell has plasmolysed */
   function inMem(mem, cx, cy, x, y, gap) {
@@ -326,8 +411,9 @@
   function plantGeom(o) {
     var water = o.water == null ? 1 : o.water, a = o.a, b = o.b, W = o.wall || 7, S = o.seed || 1;
     var pl = water >= .55 ? 0 : (.55 - water) / .55;               /* how far the cell has plasmolysed */
-    /* the wall: rounder and a little bowed out while the pressure is on it */
-    var bow = clamp((water - .55) / .45), e = lerp(5.4, 3.9, bow), ao = a * lerp(.985, 1.015, bow), bo = b * lerp(.985, 1.018, bow);
+    /* the wall: rounder and stretched a little while the turgor pressure is on it (a few per cent: Daniel, 25 Nov 2026, "when it
+       touches the cell wall ... it does adapt a little bit to the increase in pressure"); flaccid and plasmolysed alike, it relaxes */
+    var bow = clamp((water - .55) / .45), e = lerp(5.4, 3.9, bow), ao = a * lerp(.962, 1.04, bow), bo = b * lerp(.962, 1.042, bow);
     var outer = boxPts(o.x, o.y, ao, bo, e, 72), inner = boxPts(o.x, o.y, ao - W, bo - W, e, 72);
     var wob = function (th) { return Math.sin(th * 2 + S) * .5 + Math.sin(th * 5 + S * 2.3) * .32 + Math.sin(th * 3 - S) * .28; };
     var shrink = ease(pl);
@@ -338,7 +424,11 @@
       var fx = 1 - shrink * (.34 + .18 * cn + .05 * wob(th)), fy = 1 - shrink * (.3 + .2 * cn + .05 * wob(th + 1));
       return [o.x + dx * fx, o.y + dy * fy, th];
     });
-    var vk = water >= .55 ? lerp(.78, .885, bow) : lerp(.52, .78, water / .55);
+    /* the cytoplasm keeps nearly the same area whatever the cell's water (an independent review, 25 Nov 2026: it grew as the cell
+       lost water, as if the water went from the vacuole into it): the vacuole is what shrinks (0610_s25_ms_41, "decreased volume
+       of cytoplasm / vacuole"; the station's own photograph of plasmolysed onion cells) */
+    var aIn = polyArea(inner), aMem = polyArea(mem), aCyt = .15 * aIn * lerp(1, .85, clamp(1 - water));
+    var vk = Math.sqrt(Math.max(.25, 1 - aCyt / Math.max(1, aMem)));
     var vac = mem.map(function (p) { return [o.x + (p[0] - o.x) * vk * (1 - .02 * Math.sin(p[2] * 3 + S)), o.y + (p[1] - o.y) * vk * (1 + .02 * Math.sin(p[2] * 2 + S)), p[2]]; });
     /* the nucleus, in the cytoplasm at a corner of the cell; the vacuole's edge bends round it */
     var nP = mem[Math.round(mem.length * .535)], nk = lerp(.8, .74, pl), nr = Math.min(a - W, b - W) * lerp(.2, .17, pl);
@@ -382,16 +472,18 @@
       c.fillStyle = ng; c.beginPath(); c.arc(nx, ny, nr, 0, TAU); c.fill(); c.strokeStyle = C.nucLo; c.lineWidth = 1; c.stroke();
       c.fillStyle = C.nucLo; c.beginPath(); c.arc(nx + nr * .22, ny - nr * .1, nr * .3, 0, TAU); c.fill();
     }
+    var mitoAt = [];
     for (var m = 0; m < (o.mitos || 0); m++) {
       /* round the cell, and clear of the nucleus */
       var mi = (m * .27 + .1 + (S % 3) * .03) % 1; if (Math.abs(mi - .535) < .15) mi = (mi + .17) % 1;
       var mP = mem[Math.min(mem.length - 1, Math.round(mem.length * mi))], mk = lerp(.895, .9, pl);
       var mAt = inMem(mem, o.x, o.y, o.x + (mP[0] - o.x) * mk, o.y + (mP[1] - o.y) * mk, Math.min(pa, pb) * .15);
       mito(c, mAt[0], mAt[1], Math.min(pa, pb) * .24, Math.min(pa, pb) * .1, mP[2] + Math.PI / 2, 0);
+      mitoAt.push(mAt);
     }
     /* the cell membrane: a clear line, on top of everything inside */
     polyPath(c, mem); c.strokeStyle = C.memb; c.lineWidth = 1.5; c.stroke();
-    return { mem: mem, vac: vac, inner: inner, outer: outer, pl: pl, nuc: G.nuc };
+    return { mem: mem, vac: vac, inner: inner, outer: outer, pl: pl, nuc: G.nuc, ao: ao, bo: bo, mitos: mitoAt };
   }
 
   /* An animal cell: a cell membrane, cytoplasm and nucleus, and no wall.
@@ -422,12 +514,12 @@
       var rnd = MemR(S * 7 + 3);
       for (var f = 0; f < 22; f++) {
         var fa = f / 22 * TAU + rnd() * .2, len = .16 + rnd() * .2, drift = R * (1 + br * (.32 + rnd() * .5));
-        c.strokeStyle = 'rgba(58,90,114,' + (.95 - br * .25).toFixed(3) + ')'; c.lineWidth = 1.5; c.lineCap = 'round';
+        c.strokeStyle = 'rgba(196,222,240,' + (.95 - br * .2).toFixed(3) + ')'; c.lineWidth = 2; c.lineCap = 'round';
         c.beginPath(); c.arc(o.x, o.y, drift, fa, fa + len); c.stroke();
       }
       for (var d = 0; d < 34; d++) {
         var da = rnd() * TAU, dr = R * rnd() * (.5 + br * 1.1), ds = 1 + rnd() * 2.6;
-        c.fillStyle = 'rgba(228,213,176,' + (.85 - br * .35).toFixed(3) + ')'; c.beginPath(); c.arc(o.x + dr * Math.cos(da), o.y + dr * Math.sin(da), ds, 0, TAU); c.fill();
+        c.fillStyle = 'rgba(240,226,190,' + (.95 - br * .2).toFixed(3) + ')'; c.beginPath(); c.arc(o.x + dr * Math.cos(da), o.y + dr * Math.sin(da), ds, 0, TAU); c.fill();
       }
     }
     return { pts: pts };
@@ -557,7 +649,7 @@
   }
   function D_rr(c, x, y, w, h, r) { rr(c, x, y, w, h, r); }
 
-  global.MemDraw = { C: C, mol: mol, ball: ball, rr: rr, ground: ground, frame: frame, arrow: arrow, bilayer: bilayer, carrier: carrier, mito: mito, mitoEdge: mitoEdge, wallBand: wallBand,
+  global.MemDraw = { C: C, mol: mol, ball: ball, rr: rr, ground: ground, frame: frame, arrow: arrow, heat: heat, heatTint: heatTint, concGraph: concGraph, slopeOf: slopeOf, bilayer: bilayer, carrier: carrier, channel: channel, mito: mito, mitoEdge: mitoEdge, wallBand: wallBand,
                      plantCell: plantCell, plantGeom: plantGeom, animalCell: animalCell, beaker: beaker, beakerGlass: beakerGlass, bag: bag, seedling: seedling, bagPath: bagPath, polyPath: polyPath, boxPts: boxPts,
                      lerp: lerp, clamp: clamp, ease: ease, seg: seg, mixHex: mixHex, TAU: TAU };
 })(window);

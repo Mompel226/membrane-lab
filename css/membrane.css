@@ -13,18 +13,22 @@
   /* the parts of a station (a block of What you need to know, and its button on the picture): blue and teal, far from the
      inks of the words (green, orange, rose); the teal is close to the lab's own (violet until 11 Nov 2026, when violet came to mean extension; Daniel chose teal) */
   --pt1-ink:#1E5BB8; --pt1-tint:#EAF1FC; --pt1-edge:#B9D0F2; --pt2-ink:#0F766E; --pt2-tint:#E6F4F1; --pt2-edge:#A8D8CF;
+  /* a higher and a lower concentration (Daniel, 25 Nov 2026): red and blue, as in the pictures (js/mem-draw.js, heat) */
+  --hi-ink:#C3271C; --lo-ink:#0B66B8;
 }
 @media (prefers-color-scheme: dark){
 :root:not([data-theme="light"]){
   --accent:#8FE3C8; --accent-2:#6FD4B4; --accent-tint:#173029;
   --k-struct:#6EDB9A; --k-proc:#F5A35C; --k-subst:#F48FB4;
   --pt1-ink:#8DB9FF; --pt1-tint:#14233A; --pt1-edge:#2C4C7A; --pt2-ink:#7FD8C9; --pt2-tint:#12302C; --pt2-edge:#2D6A61;
+  --hi-ink:#FF8A7D; --lo-ink:#7CC0FF;
 }
 }
 :root[data-theme="dark"]{
   --accent:#8FE3C8; --accent-2:#6FD4B4; --accent-tint:#173029;
   --k-struct:#6EDB9A; --k-proc:#F5A35C; --k-subst:#F48FB4;
   --pt1-ink:#8DB9FF; --pt1-tint:#14233A; --pt1-edge:#2C4C7A; --pt2-ink:#7FD8C9; --pt2-tint:#12302C; --pt2-edge:#2D6A61;
+  --hi-ink:#FF8A7D; --lo-ink:#7CC0FF;
 }
 
 /* ---------- the header: the shelf's own colours, never the other labs' green ---------- */
@@ -255,6 +259,8 @@ svg .lb__lead,svg .lb__halo{vector-effect:non-scaling-stroke}
 .cellv__svg{flex:1;min-height:0;width:100%;height:100%;display:block}
 .cellv__veil{fill:var(--on-photo-veil);opacity:0;transition:opacity .3s ease;pointer-events:none}
 .cellv__veil.is-on{opacity:1}
+/* the pressed part's own traced outline on a photograph (docs/PICTURE-STANDARD.md, A) */
+.cellv__edge{fill:none;stroke:var(--accent);stroke-width:1.7px;vector-effect:non-scaling-stroke;pointer-events:none}
 .cellv__note{margin:6px 8px 0;font-size:13.5px;font-weight:600;color:var(--amber);text-align:center}
 .cellv__note[hidden]{display:none}
 
@@ -343,6 +349,13 @@ p,li,dd,figcaption{text-wrap:pretty}
 .mf__pill.is-ok,.memv__pill.is-ok{border-color:var(--ok);color:var(--ok)}
 .mf__pill.is-warn,.memv__pill.is-warn{border-color:var(--amber);color:var(--amber)}
 .mf__pill.is-bad,.memv__pill.is-bad{border-color:var(--bad);color:var(--bad)}
+/* a higher and a lower concentration: the same red and blue as the names and the picture */
+.mf__pill.is-hi,.memv__pill.is-hi{border-color:var(--hi-ink);color:var(--hi-ink)}
+.mf__pill.is-lo,.memv__pill.is-lo{border-color:var(--lo-ink);color:var(--lo-ink)}
+.lb.lb--hi .lb__txt{fill:var(--hi-ink);font-weight:600}
+.lb.lb--lo .lb__txt{fill:var(--lo-ink);font-weight:600}
+.lb.lb--hi .lb__lead,.lb.lb--hi .lb__dot{stroke:var(--hi-ink)}
+.lb.lb--lo .lb__lead,.lb.lb--lo .lb__dot{stroke:var(--lo-ink)}
 /* a station's left picture: its buttons, the picture, its read-outs */
 /* the number of the station you are in: a fainter disc, so its white number stays readable on the accent */
 .rstep[aria-current="true"] .rstep__n{background:rgba(255,255,255,.12)}

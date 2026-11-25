@@ -16,6 +16,9 @@
    `narrow` is the same picture arranged for a stage under 520 px.
    `bands: true` (the Membrane Lab's photographs): the picture keeps the whole width of the stage and its names stand above
    and below it, each on one upright line ending ON its part (side 'T' or 'B').
+   `outlines` and `shapes` (docs/PICTURE-STANDARD.md, A: "the part's own outline, never a round spot"): outlines traced from
+   the photograph, by name; shapes:{ part:{ fill:[names] } | { line:name, w } }. Pressing the part keeps exactly that shape
+   lit: a filled area (two names: the space between them) or a line of width w.
    ============================================================ */
 (function (global) {
   'use strict';
@@ -60,6 +63,9 @@
       var mask = el('mask', { id: uid + 'm' + k, maskUnits: 'userSpaceOnUse', x: m.x0 || 0, y: m.y0 || 0, width: m.w, height: m.h }, defs);
       el('rect', { x: m.x0 || 0, y: m.y0 || 0, width: m.w, height: m.h, fill: '#fff' }, mask);
       var hole = el('ellipse', { cx: 0, cy: 0, rx: 0, ry: 0, fill: '#000', filter: 'url(#' + uid + 'f' + k + ')' }, mask);
+      var soft = el('filter', { id: uid + 'e' + k, x: '-5%', y: '-5%', width: '110%', height: '110%' }, defs);
+      el('feGaussianBlur', { stdDeviation: '1.2' }, soft);
+      var cut = el('path', { d: '', fill: '#000', 'fill-rule': 'evenodd', filter: 'url(#' + uid + 'e' + k + ')' }, mask);
       /* the picture at its full size, CLIPPED to the crop x0, y0, w, h (a drawing's own viewBox units): without the clip
          the rest of the photograph shows in the label margins and above and below the crop (8 Oct 2026 review) */
       var clip = el('clipPath', { id: uid + 'c' + k }, defs);
@@ -67,10 +73,11 @@
       var img = el('image', { href: 'assets/photos/' + (m.svg || m.img), x: 0, y: 0, width: m.iw || m.w, height: m.ih || m.h, preserveAspectRatio: 'none',
         'clip-path': 'url(#' + uid + 'c' + k + ')' }, svg);
       var veil = el('rect', { x: m.x0 || 0, y: m.y0 || 0, width: m.w, height: m.h, class: 'cellv__veil', mask: 'url(#' + uid + 'm' + k + ')' }, svg);
+      var edge = el('path', { d: '', class: 'cellv__edge', 'fill-rule': 'evenodd' }, svg);
       var labG = el('g', {}, svg);
       svg.style.display = k === 0 ? '' : 'none';
       stage.appendChild(svg);
-      return { spec: m, cur: m, narrowSpec: m.narrow ? Object.assign({}, m, m.narrow) : null, btn: b, svg: svg, labG: labG, hole: hole, veil: veil,
+      return { spec: m, cur: m, narrowSpec: m.narrow ? Object.assign({}, m, m.narrow) : null, btn: b, svg: svg, labG: labG, hole: hole, cut: cut, edge: edge, veil: veil,
         img: img, clipR: clipR, mask: mask, maskR: mask.firstChild, blur: f.firstChild, font: 0 };
     });
     /* the arrangement of this picture for the stage's width; swapped in place when it changes */
@@ -236,8 +243,16 @@
         g.addEventListener('click', function () { ctx.pick(k); });
         g.addEventListener('keydown', function (ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); ctx.pick(k); } });
       });
-      var pt = lit && m.pts[lit];
-      if (pt) {
+      var pt = lit && m.pts[lit], sh = lit && m.shapes && m.shapes[lit];
+      var dd = sh ? (sh.fill || [sh.line]).map(function (n) { return m.outlines[n]; }).join(' ') : '';
+      M.cut.setAttribute('d', dd); M.edge.setAttribute('d', dd);
+      if (sh) {
+        /* the part's own traced shape stays lit, and nothing beside it */
+        M.hole.setAttribute('rx', 0); M.hole.setAttribute('ry', 0);
+        M.cut.setAttribute('fill', sh.line ? 'none' : '#000'); M.cut.setAttribute('stroke', sh.line ? '#000' : 'none');
+        M.cut.setAttribute('stroke-width', sh.w || 0);
+        M.veil.classList.add('is-on');
+      } else if (pt) {
         var rad = pt[3] || Math.max(m.w, m.h) / 9;
         M.hole.setAttribute('cx', pt[0]); M.hole.setAttribute('cy', pt[1]); M.hole.setAttribute('rx', rad); M.hole.setAttribute('ry', rad);
         M.veil.classList.add('is-on');

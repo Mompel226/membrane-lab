@@ -21,33 +21,38 @@
   /* The picture takes the whole width of its column, and its names stand in a band above it and a band below it, each
      joined to its part by one upright line that ends ON the part (Daniel, 5 Nov 2026: "put it at the top if you need it").
      Upright lines at different places cannot cross. On a phone each name is a numbered pin, with the words in a key. */
-  function frame(svg, bg, W, H, D, narrow, px) {
-    var f = px * (W + 4) / D, band = narrow ? f * 1.7 : f * 2.95 + 3;
-    var vb = { x: -2, y: -band, w: W + 4, h: H + 2 * band, bw: W, bh: H };
+  function frame(svg, bg, W, H, D, narrow, px, aspect, lines) {
+    var f = px * (W + 4) / D, band = narrow ? f * 1.7 : f * (.59 + 1.18 * (lines || 2)) + 3;
+    var vb = { x: -2, y: -band, w: W + 4, h: H + 2 * band, bw: W, bh: H, ex: 0 };
+    /* aspect: the figure's shape (width over height). A picture made smaller by the height of its column stands in the
+       middle of the figure, and the width beside it is its names' (25 Nov 2026: at 1101 to 1366 px in a short window the
+       long names, "higher concentration of nitrate ions", were cut or ran over each other in bands as narrow as the drawing) */
+    if (aspect && aspect * vb.h > vb.w) { vb.ex = (aspect * vb.h - vb.w) / 2; vb.x -= vb.ex; vb.w += 2 * vb.ex; }
     svg.setAttribute('viewBox', K.n1(vb.x) + ' ' + K.n1(vb.y) + ' ' + K.n1(vb.w) + ' ' + K.n1(vb.h));
     bg.setAttribute('x', vb.x); bg.setAttribute('y', vb.y); bg.setAttribute('width', vb.w); bg.setAttribute('height', vb.h);
     return { f: f, vb: vb, narrow: narrow, to: function (x, y) { return [x, y]; } };
   }
   /* a long name in a band breaks at its meaning ("partially permeable" over "membrane"), never in the middle of either part.
-     Only the drawing is tied: the scene's words stay plain, so the reading time still counts every word */
+     Only the drawing is tied: the scene's words stay plain, so the reading time still counts every word. In bands of three
+     lines (loose), a second part too long for one line breaks at its own words, under the first part */
   var FIRST_LINES = ['outside the cell:', 'inside the cell:', 'partially permeable', 'water fills', 'cytoplasm of a'];
-  function tied(text) {
+  function tied(text, loose) {
     var t = String(text), keep = function (x) { return x.replace(/ /g, '\u00A0'); };
     for (var i = 0; i < FIRST_LINES.length; i++) {
       var a = FIRST_LINES[i];
-      if (t.indexOf(a + ' ') === 0) return keep(a) + ' ' + keep(t.slice(a.length + 1));
+      if (t.indexOf(a + ' ') === 0) { var rest = t.slice(a.length + 1); return keep(a) + ' ' + (loose && rest.length > 22 ? rest : keep(rest)); }
     }
     return t;
   }
-  function putNames(lay, items, narrow, key) {
-    var vb = lay.vb, o = { items: items, left: -2, right: vb.bw + 2, font: lay.f, top: vb.y + 4, bottom: vb.y + vb.h - 4, bandT: -3, bandB: vb.bh + 3, bandL: 2, bandR: vb.bw - 2 };
+  function putNames(lay, items, narrow, key, lines) {
+    var vb = lay.vb, ex = vb.ex || 0, o = { items: items, left: -2, right: vb.bw + 2, font: lay.f, top: vb.y + 4, bottom: vb.y + vb.h - 4, bandT: -3, bandB: vb.bh + 3, bandL: 2 - ex, bandR: vb.bw - 2 + ex };
     if (narrow) {
       var P = L.pinLabels(Object.assign({}, o, { gap: 4 }));
       if (key) { key.hidden = !P.order.length; key.innerHTML = P.order.map(function (q) { return '<li><b>' + q.n + '</b> ' + L.esc(q.text) + '</li>'; }).join(''); }
       return P.svg;
     }
     if (key) key.hidden = true;
-    o.items = items.map(function (q) { return Object.assign({}, q, { text: tied(q.text) }); });
+    o.items = items.map(function (q) { return Object.assign({}, q, { text: tied(q.text, lines > 2) }); });
     return L.labels(Object.assign({}, o, { gap: 6, width: 150 }));
   }
 
@@ -125,6 +130,7 @@
 
   /* ---------- a station's left picture ----------
      o = { scene, cls?, buttons?: [[id, label]], say(state)?, read?: [[key, label, icon?, words behind the icon?]], cL, cR,
+         lines? (3: bands that hold three lines, for names too long for two),
          key?: { all: [[kind, name], …], sets: [[name, …], …] (what each state shows), now() (the names shown now) } }
      returns { el, setButtons(id), repaint(), labels(), stage: ... } for a view to wrap in Views.add */
   function MemView(o) {
@@ -189,13 +195,14 @@
       lastKey = key; narrow = rw < 440;
       var cs = global.getComputedStyle(root), pad = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom), gap = parseFloat(cs.rowGap) || 6;
       var room = H0 - pad - (bar.hidden ? 0 : bar.offsetHeight + gap) - (keyEl ? keyEl.offsetHeight + gap : 0) - (o.read ? read.offsetHeight + gap : 0) - (pk.hidden ? 0 : pk.offsetHeight + gap);
-      lay = frame(svg, bg, scene.W, scene.H, rw, narrow, 14);
+      lay = frame(svg, bg, scene.W, scene.H, rw, narrow, 14, 0, o.lines);
       var want = rw * lay.vb.h / lay.vb.w;
       /* on a phone the picture scrolls with the page, whatever its height; in a column it fits the room there is */
       var fits = (global.matchMedia && global.matchMedia('(max-width: 1000px)').matches) || room < 120 ? want : Math.min(room, want);
       fig.style.height = Math.round(fits) + 'px';
-      /* a picture limited by the height of its column: the names keep their size on the screen all the same */
-      if (fits < want - 1) lay = frame(svg, bg, scene.W, scene.H, fits * lay.vb.w / lay.vb.h, narrow, 14);
+      /* a picture limited by the height of its column: the names keep their size on the screen all the same, and may stand
+         in the width beside the drawing */
+      if (fits < want - 1) lay = frame(svg, bg, scene.W, scene.H, fits * lay.vb.w / lay.vb.h, narrow, 14, rw / fits, o.lines);
       return true;
     }
     function names() {
@@ -205,7 +212,7 @@
         if (q.alts) it.alts = q.alts.map(function (a) { return lay.to(a[0], a[1]); });
         return it;
       });
-      gLab.innerHTML = putNames(lay, items, narrow, pk);
+      gLab.innerHTML = putNames(lay, items, narrow, pk, o.lines);
       /* the numbered names keep the height of their fullest state at this width, so the picture does not jump between buttons */
       if (!pk.hidden) {
         var w = Math.round(fig.getBoundingClientRect().width);

@@ -54,7 +54,11 @@ the [Plants Lab](https://nlcsbiology.com/plants-lab/).
 <br>
 
 **Pictures that tell the truth.** The particles are not told where to go. Each one moves at random, and a wall, a
-divider or a membrane lets it cross or not; the numbers on the screen are real counts of the crossings each way. Molecules
+divider or a membrane lets it cross or not; the numbers on the screen are real counts of the crossings each way. The
+particles are solid: each moves in a straight line until it hits another particle or a wall. Water crosses a cell membrane
+mostly through channel proteins, and a protein carrier is never open at both ends. A higher concentration is red and a
+lower one blue, and a graph under the diffusion boxes shows the concentration gradient as a slope that becomes flat. With so
+few particles, the counts at equilibrium go up and down a little, as they would: nothing holds them equal. Molecules
 and membranes are drawn at their true sizes beside each other wherever the picture says so, and the motion is slowed down
 many millions of times. The photographs are real micrographs, credited under the picture. The film of red dye in water is real footage, and its
 caption says what the film truly shows: the falling dye also moves the water, so that fast spreading is not diffusion alone.

@@ -24,6 +24,8 @@
     return Object.assign({ W: sim.w, H: sim.h, seek: function (t) { tr.seek(t); }, to: function (t) { tr.to(t); }, idle: function (d) { tr.idle(d); } }, o);
   }
   var WHITE = '#FFFFFF', NET = '#FFF3C4';
+  /* where the channel proteins stand in a membrane, below the arrow of the net movement */
+  function lanes(H) { return [H * .36, H * .61, H * .86]; }
   /* free ions move round the protein carrier and the mitochondrion, never over them, so a pupil can see which ion the
      carrier holds: a particle that enters either shape is put back on its edge */
   function keepClear(cx, cy, u, E) {
@@ -43,48 +45,50 @@
   /* ==================================================================================== 1. Diffusion, step by step */
   L.add('diffusionfilm', Film({
     title: 'Diffusion, step by step',
-    aria: 'Scent particles and air particles move at random in two boxes of equal volume. A divider is lifted, the scent spreads, and the two concentrations become equal.',
+    aria: 'Scent particles and air particles move at random in two boxes of equal volume, with a graph of the concentration of scent across the boxes under them. A divider is lifted, the scent spreads, the graph slopes down from left to right and then becomes flat, and the two concentrations become equal.',
     pills: [['l', 'Left box:', 'scent', 'scent particles'], ['r', 'Right box:', 'scent', 'scent particles'], ['n', 'Net movement:']],
-    key: [['scent', 'scent particle'], ['air', 'air particle'], ['net', 'net movement', [2]], ['ways', 'crossing each way', [3]]],
-    M: [0, 6, 11, 21, 31],
+    key: [['scent', 'scent particle'], ['air', 'air particle'], ['net', 'net movement', [2, 3]], ['ways', 'crossing each way', [3]]],
+    /* the divider stays down until step 3, so waiting in steps 1 and 2 changes nothing; step 3 waits while the slope is
+       clear, and if a reader waits longer the scent goes on spreading, as it would; equilibrium comes during step 4 */
+    M: [0, 6, 11, 19, 31],
     steps: [
       { t: 0, h: 'Particles move at random', p: [['ig', 'The two boxes have the **same volume**. Every particle moves in a straight line until it hits something, then moves in a new direction. This is **random movement**. Follow the ringed particle.']] },
-      { t: 6, h: 'The divider is lifted', p: [['ig', 'All the scent particles are in the left box: its **concentration** of scent is higher. The divider rises, and now particles can cross **in both directions**.']] },
-      { t: 11, h: 'More cross one way', p: [['ig', 'More scent particles cross from left to right than from right to left, because more are on the left. Look at the counts: the left box loses particles, and the right box gains them. This is a **net movement** down the **concentration gradient**: **diffusion**.']] },
-      { t: 21, h: 'Equilibrium', p: [['ig', 'The concentrations are now **equal**. The particles do not stop: they keep moving, and equal numbers cross each way, so the **net movement is zero**. The counts change a little at each moment, because the movement is random.'], ['bey', 'The air particles diffused too, the opposite way.']] }
+      { t: 6, h: 'Two concentrations', p: [['ig', 'All the scent particles are in the left box: its **concentration** of scent is higher (red), and the right box’s is lower (blue). The graph under the boxes shows the concentration of scent across them.']] },
+      { t: 11, h: 'The divider is lifted', p: [['ig', 'The divider rises, and particles cross **in both directions**. More scent particles cross from left to right, because more are on the left. On the graph, the concentration slopes down from left to right: this slope is the **concentration gradient**. The **net movement** of particles down the gradient is **diffusion**.']] },
+      { t: 19, h: 'Equilibrium', p: [['ig', 'The concentrations become **equal**, and the graph becomes flat: there is no concentration gradient any more. The particles do not stop: they keep moving, and equal numbers cross each way, so the **net movement is zero**. The counts change a little at each moment, because the movement is random.'], ['bey', 'The air particles diffused too, the opposite way.']] }
     ],
     make: function () {
-      var W = 560, H = 330, dv = { r: 0, bal: false };
+      /* H: the box. Under it, the graph of the concentration of scent across the box (as the station's picture) */
+      var W = 560, H = 330, GY = H + 12, GH = 96, dv = { r: 0, eq: 1e9 }, G = null;
       var sim = Sim.make({
-        seed: 31, w: W, h: H,
-        gate: { x: W / 2, hw: 3, pass: function (k, y, dir, s) {
-          if (y < H - dv.r) return 0;
-          if (!s.holdAllows(k, dir)) return 0;   /* while a step waits, what it shows remains */
-          if (!dv.bal) return 1;
-          /* a few dozen particles swing far more than the billions in real air: once the two sides are about equal,
-             a crossing that would take them further apart is turned back, so the counts stay within 2 of each other */
-          var n = s.side[s.kindIx(k)], from = dir > 0 ? n[0] : n[1], to = dir > 0 ? n[1] : n[0];
-          return from > to ? 1 : from === to ? .5 : 0;
-        } },
-        kinds: { air: { n: [14, 40], speed: 116, tau: .9 }, scent: { n: [26, 0], speed: 116, tau: .9 } }
+        seed: 31, w: W, h: H, hit: true,
+        /* the divider is the only wall: a particle that meets the opening always crosses */
+        gate: { x: W / 2, hw: 3, thin: true, blocks: function (y) { return y < H - dv.r; }, pass: function (k, y) { return y < H - dv.r ? 0 : 1; } },
+        kinds: { air: { n: [14, 40], speed: 116, tau: 1e9, r: 6 }, scent: { n: [26, 0], speed: 116, tau: 1e9, r: 6.5 } }
       });
       var ringI = sim.kinds[0].n[0] + sim.kinds[0].n[1];   /* the first scent particle */
+      var prof = Sim.profile(sim, 'scent', { full: 26 / (W / 2), sigma: 52, tau: 1.4, split: function () { return dv.r < H ? W / 2 : null; } });
       /* the ringed particle's path, and the moment it last changed direction: the ring pulses as it hits something */
       var vx0 = 0, vy0 = 0, hitAt = -9;
       sim.onMove = function (s) {
         s.trail.push(s.X[ringI], s.Y[ringI]); if (s.trail.length > 150) s.trail.splice(0, 2);
         if (s.VX[ringI] !== vx0 || s.VY[ringI] !== vy0) { vx0 = s.VX[ringI]; vy0 = s.VY[ringI]; hitAt = s.t; }
+        prof.step(Sim.DT);
       };
-      var reset0 = sim.reset; sim.reset = function () { reset0.call(sim); vx0 = vy0 = 0; hitAt = -9; };
+      var reset0 = sim.reset; sim.reset = function () { reset0.call(sim); vx0 = vy0 = 0; hitAt = -9; dv.r = 0; dv.eq = 1e9; prof.reset(); prof.step(0); };
+      prof.step(0);
       function rules(t, s) {
-        dv.r = (H + 10) * ease(seg(t, 6.8, 9.6));
-        if (t < 12) dv.bal = false;
-        else if (!dv.bal) { var n = s.count('scent'); if (Math.abs(n[0] - n[1]) <= 2) dv.bal = true; }
+        dv.r = (H + 10) * ease(seg(t, 11.2, 13.6));
+        /* the first moment the counts are within 2 of each other AND the graph is flat: from then on the picture says "equal" */
+        if (t >= 14 && dv.eq > t) { var m = s.count('scent'); if (Math.abs(m[0] - m[1]) <= 2 && prof.flat()) dv.eq = t; }
       }
       return scene(sim, rules, {
+        H: GY + GH,
         draw: function (c, t) {
           D.frame(c, 0, 0, W, H, 16, function () {
             D.ground(c, 0, 0, W, H, C.air1, C.air0);
+            /* once concentration is the subject, the box shows it: red higher, blue lower */
+            if (t >= 6.2) D.heatTint(c, 0, 0, W, H, prof, .3 * clamp((t - 6.2) / .6));
             /* the two equal volumes, marked on the ground */
             c.strokeStyle = 'rgba(190,220,245,.4)'; c.lineWidth = 1; c.setLineDash([3, 5]);
             c.beginPath(); c.moveTo(W / 2, 0); c.lineTo(W / 2, H); c.stroke(); c.setLineDash([]);
@@ -109,9 +113,9 @@
               c.fillStyle = '#5E7387'; c.fillRect(W / 2 - 3.5, by - 1.5, 7, 2);
             }
             /* the net movement */
-            var a = seg(t, 12, 13.2) * (1 - seg(t, 21, 21.7));
+            var a = t < dv.eq ? seg(t, 14.2, 15.2) : 0;
             if (a > 0) { c.globalAlpha = a; D.arrow(c, W / 2 - 58, H / 2, W / 2 + 62, H / 2, 16, NET, { head: 22, headW: 18 }); c.globalAlpha = 1; }
-            var b = seg(t, 22, 23);
+            var b = t >= dv.eq ? 1 : 0;
             if (b > 0) {
               c.globalAlpha = b;
               D.arrow(c, W / 2 - 46, H / 2 - 18, W / 2 + 46, H / 2 - 18, 7, WHITE, { head: 15, headW: 11 });
@@ -119,19 +123,30 @@
               c.globalAlpha = 1;
             }
           });
+          /* the graph; while the net movement is the subject, the way down its slope */
+          G = D.concGraph(c, prof, { x: 0, y: GY, w: W, h: GH, mid: W / 2 });
+          var aS = t < dv.eq ? seg(t, 14.2, 15.2) : 0, sl = aS > 0 && D.slopeOf(G, prof);
+          if (sl) { c.globalAlpha = aS; D.arrow(c, sl.a[0] + 6, sl.a[1] - 13, sl.b[0] - 6, sl.b[1] - 13, 7, NET, { head: 14, headW: 11 }); c.globalAlpha = 1; }
         },
         labels: function (t) {
           var it = [];
-          if (t < 9.6) it.push({ id: 'dv', text: 'divider', x: W / 2, y: 22, side: 'T' });
-          if (t >= 6.2 && t < 21) { it.push({ id: 'hi', text: 'higher concentration', x: W * .25, y: 20, side: 'T' }); it.push({ id: 'lo', text: 'lower concentration', x: W * .75, y: 20, side: 'T' }); }
-          if (t >= 21) { it.push({ id: 'hi', text: 'equal concentration', x: W * .25, y: 20, side: 'T' }); it.push({ id: 'lo', text: 'equal concentration', x: W * .75, y: 20, side: 'T' }); }
+          if (t < 13.6) it.push({ id: 'dv', text: 'divider', x: W / 2, y: 22, side: 'T' });
+          if (t >= 6.2 && t < dv.eq) { it.push({ id: 'hi', text: 'higher concentration of scent', x: W * .25, y: 20, side: 'T', cls: 'lb--hi' }); it.push({ id: 'lo', text: 'lower concentration of scent', x: W * .75, y: 20, side: 'T', cls: 'lb--lo' }); }
+          if (t >= dv.eq) { it.push({ id: 'hi', text: 'equal concentration of scent', x: W * .25, y: 20, side: 'T' }); it.push({ id: 'lo', text: 'equal concentration of scent', x: W * .75, y: 20, side: 'T' }); }
+          if (G) {
+            /* the graph's name stands clear of the slope's */
+            var sl = t < dv.eq && D.slopeOf(G, prof), on = sl && t >= 14.2, sx = sl ? (sl.a[0] + sl.b[0]) / 2 : W / 2;
+            it.push({ id: 'graph', text: 'concentration of scent across the box', x: on && sx < 300 ? W - 110 : 110, y: G.base - 3, side: 'B' });
+            if (on) it.push({ id: 'slope', text: 'concentration gradient', x: sx, y: (sl.a[1] + sl.b[1]) / 2, side: 'B' });
+            if (t >= dv.eq) it.push({ id: 'flat', text: 'no concentration gradient', x: W * .55, y: G.pts[Math.round(G.pts.length * .55)][1], side: 'B' });
+          }
           return it;
         },
         read: function (t, pill) {
-          var n = sim.count('scent'), x = sim.crossed('scent');
-          pill('l', String(n[0]), n[0] > n[1] + 3 ? 'warn' : 'ok');
-          pill('r', String(n[1]), n[0] > n[1] + 3 ? 'warn' : 'ok');
-          pill('n', t < 9 ? 'none yet' : t >= 21 ? 'about zero now' : '→ ' + Math.max(0, x.net) + (x.net === 1 ? ' particle' : ' particles') + ' so far', t >= 21 ? 'ok' : 'warn');
+          var n = sim.count('scent'), x = sim.crossed('scent'), d = t >= dv.eq ? 0 : n[0] - n[1];
+          pill('l', String(n[0]), d > 2 ? 'hi' : d < -2 ? 'lo' : 'ok');
+          pill('r', String(n[1]), d > 2 ? 'lo' : d < -2 ? 'hi' : 'ok');
+          pill('n', t < 13 ? 'none yet' : t >= dv.eq ? 'about zero now' : '→ ' + Math.max(0, x.net) + (x.net === 1 ? ' particle' : ' particles') + ' so far', t >= dv.eq ? 'ok' : 'warn');
         }
       });
     }
@@ -197,6 +212,8 @@
       c.arc(tip + r + k, hy, r, Math.PI / 2, Math.PI * 1.5);
       c.closePath();
     }
+    /* the thin layer of soil water on the cell */
+    outline(-3.5); c.fillStyle = 'rgba(120,200,240,.42)'; c.fill();
     outline(0);
     var lg = c.createLinearGradient(tip, y0, x0 + w, y0 + h); lg.addColorStop(0, C.wall0); lg.addColorStop(1, C.wall1);
     c.fillStyle = lg; c.fill(); c.strokeStyle = C.wallLo; c.lineWidth = 1; c.stroke();
@@ -214,22 +231,23 @@
   }
   L.add('zoomfilm', Film({
     title: 'From a cell to its membrane',
-    aria: 'A root hair cell in the soil. The view zooms to the tip of the root hair and then to its cell membrane, where oxygen molecules cross in both directions.',
+    aria: 'A root hair cell in the soil, with a thin layer of soil water on it. The view zooms to the tip of the root hair and then to its cell membrane, where oxygen molecules dissolved in the soil water cross in both directions.',
     pills: [['w', 'Width of this view:'], ['i', 'Oxygen into the cell:'], ['o', 'Oxygen out of the cell:']],
     key: [['oxygen', 'oxygen molecule', [1, 2, 3]], ['lipid', 'lipid of the cell membrane', [1, 2, 3]], ['ways', 'crossing each way', [2, 3]], ['net', 'net movement', [2, 3]]],
+    notes: [['Mitochondria are not drawn to scale.']],
     M: [0, 6, 13, 24, 34],
     steps: [
-      { t: 0, h: 'A root hair cell in the soil', p: [['ig', 'This **root hair cell** is alive and **respiring**, so it needs **oxygen**. The air spaces between the soil grains hold oxygen.']] },
-      { t: 6, h: 'Closer: the cell membrane', p: [['ig', 'The picture now shows the tip of the **root hair**. The **cell wall** lets oxygen through. The thin layer inside the wall is the **cell membrane**, two layers of lipid molecules.']] },
+      { t: 0, h: 'A root hair cell in the soil', p: [['ig', 'This **root hair cell** is alive and **respiring**, so it needs **oxygen**. The air spaces between the soil grains hold oxygen, and oxygen dissolves in the thin layer of **soil water** on the cell.']] },
+      { t: 6, h: 'Closer: the cell membrane', p: [['ig', 'The picture now shows the tip of the **root hair**. The **cell wall** lets oxygen through; the real wall is much thicker than it is drawn here. The thin layer inside the wall is the **cell membrane**, two layers of lipid molecules.']] },
       { t: 13, h: 'Oxygen crosses both ways', p: [['ig', 'Oxygen molecules pass between the lipids **in both directions**. There are more outside the cell, so more cross **into the cell** than out of it.'], ['ib', 'Small, uncharged molecules such as oxygen cross the lipid bilayer by simple diffusion.']] },
       { t: 24, h: 'Respiration keeps the gradient', p: [['ig', 'A **mitochondrion** uses oxygen in **respiration**, so the concentration inside the cell remains **lower** than outside. The **concentration gradient** remains and the net movement continues.']] }
     ],
     make: function () {
       var W = 560, H = 330, u = 26, FX = 96, FY = 170, E = { x: W + 120, y: H + 96, r: 300 }, base = { ab: 0, ba: 0, on: false };
       var sim = Sim.make({
-        seed: 6, w: W, h: H,
+        seed: 6, w: W, h: H, hit: true,
         gate: { x: W / 2, hw: 2.5 * u, pass: function () { return .4; } },
-        kinds: { oxygen: { n: [34, 7], speed: 62, tau: .8, through: 56, keep: [34, 99] } }
+        kinds: { oxygen: { n: [34, 7], speed: 62, tau: .8, through: 56, keep: [34, 99], r: 5 } }
       });
       /* the mitochondrion uses oxygen: a molecule that reaches it is gone, and another enters at the far edge of the soil air */
       sim.onMove = function (s) {
@@ -266,8 +284,8 @@
             if (l > 0) {
               c.save();
               c.beginPath(); c.arc(W / 2, H / 2, lerp(4, Math.sqrt(W * W + H * H) / 2 + 4, l), 0, D.TAU); c.clip();
-              /* outside the cell, the cell wall, then the membrane and the cytoplasm */
-              D.ground(c, 0, 0, W / 2, H, '#1B2C3A', '#13212C');
+              /* the soil water, the cell wall, then the membrane and the cytoplasm */
+              D.ground(c, 0, 0, W / 2, H, C.dilute[0], C.dilute[1]);
               D.wallBand(c, W / 2 - 136, W / 2 - 66, 0, H);
               D.ground(c, W / 2, 0, W / 2, H, C.cytoDark[0], C.cytoDark[1]);
               D.mitoEdge(c, E, seg(t, 24.6, 26));
@@ -299,6 +317,9 @@
             it.push({ id: 'cell', text: 'root hair cell', x: 448, y: 96, side: 'T' });
             it.push({ id: 'soil', text: 'soil grain', x: GRAIN.x, y: GRAIN.y, side: 'B' });
             it.push({ id: 'air', text: 'air space, with oxygen', x: AIR.x, y: AIR.y, side: 'B' });
+            it.push({ id: 'film', text: 'soil water', x: 130, y: 156, side: 'T' });
+            it.push({ id: 'nuc', text: 'nucleus', x: 368, y: 214, side: 'B' });
+            it.push({ id: 'vac', text: 'vacuole', x: 470, y: 200, side: 'B' });
           }
           /* the camera has stopped: the two layers at the tip of the hair are named before the close-up opens */
           if (t >= 9.4 && t < 10.9) {
@@ -307,7 +328,7 @@
             it.push({ id: 'mem', text: 'cell membrane', x: xx + 99.4 * zz, y: yy + 176 * zz, side: 'B' });
           }
           if (t >= 12.1) {
-            it.push({ id: 'out', text: 'outside the cell', x: 62, y: H - 18, side: 'B' });
+            it.push({ id: 'out', text: 'soil water', x: 62, y: H - 18, side: 'B' });
             it.push({ id: 'wall', text: 'cell wall', x: W / 2 - 100, y: H - 18, side: 'B' });
             it.push({ id: 'mem', text: 'cell membrane', x: W / 2, y: 14, side: 'T' });
             it.push({ id: 'in', text: 'cytoplasm', x: W / 2 + 96, y: H - 18, side: 'B' });
@@ -329,34 +350,53 @@
   /* ==================================================================================== 3. Osmosis, step by step */
   L.add('osmosisfilm', Film({
     title: 'Osmosis, step by step',
-    aria: 'A partially permeable membrane between a dilute and a concentrated sucrose solution that start with equal volumes. Water molecules cross both ways, more from the dilute side. Sucrose molecules cannot cross.',
+    aria: 'A partially permeable membrane between a dilute and a concentrated sucrose solution that start with equal volumes. Water molecules cross both ways, mostly through channel proteins, and more cross from the dilute side. Sucrose molecules cannot cross.',
     pills: [['a', 'Water crossing →'], ['b', 'Water crossing ←'], ['n', 'Net movement:']],
-    key: [['water', 'water molecule'], ['sucrose', 'sucrose molecule'], ['lipid', 'lipid of the membrane'], ['net', 'net movement of water', [2, 3]]],
+    key: [['water', 'water molecule'], ['sucrose', 'sucrose molecule'], ['lipid', 'lipid of the membrane'], ['channel', 'channel protein for water'], ['net', 'net movement of water', [2, 3]]],
     notes: [['Only some of the water molecules are drawn: water fills all the space.']],
     M: [0, 7, 14, 24, 32],
     steps: [
       { t: 0, h: 'Two solutions, one membrane', p: [['ig', 'A **partially permeable membrane** separates two solutions that start with **equal volumes**. The left one is **dilute** (few sucrose molecules). The right one is **concentrated** (many).']] },
-      { t: 7, h: 'Water passes, sucrose does not', p: [['ig', 'Follow the two ringed molecules. Small **water molecules** pass through the membrane **in both directions**. **Sucrose** molecules are too large: they hit the membrane and move away.']] },
+      { t: 7, h: 'Water passes, sucrose does not', p: [['ig', 'Follow the two ringed molecules. Small **water molecules** pass through the membrane **in both directions**. **Sucrose** molecules are too large: they hit the membrane and move away.'], ['ib', 'Most water molecules cross through channel proteins called aquaporins (B2.1.5). A few cross between the lipids.']] },
       { t: 14, h: 'More water crosses one way', p: [['ig', 'Look at the counts. More water molecules cross from the **dilute** solution to the **concentrated** solution than the other way. This **net movement of water** is **osmosis**.']] },
       { t: 24, h: 'The words for the exam', p: [['ig', 'The dilute solution has a **higher water potential**. The concentrated solution has a **lower water potential**. Water moves **from higher to lower** water potential.'], ['ib', 'IB Biology compares these solutions as hypotonic and hypertonic.']] }
     ],
     make: function () {
-      var W = 560, H = 340, u = 26, base = { ab: 0, ba: 0, on: false };
+      var W = 560, H = 340, u = 26, base = { ab: 0, ba: 0, on: false }, CH = Sim.channels(lanes(H), 17, .02, 16, .5);
       var sim = Sim.make({
-        seed: 11, w: W, h: H,
-        gate: { x: W / 2, hw: 2.5 * u, pass: function (k) { return k === 'water' ? .4 : 0; } },
-        kinds: { water: { n: [60, 28], speed: 56, tau: .8, through: 58, keep: [60, 28] }, sucrose: { n: [3, 15], speed: 22, tau: .5 } }
+        seed: 16, w: W, h: H, hit: true,
+        gate: { x: W / 2, hw: 2.5 * u, lane: CH.lane, pass: function (k, y, dir, s) { return k === 'water' ? CH.pass(y, dir, s) : 0; } },
+        kinds: { water: { n: [60, 28], speed: 56, tau: .8, through: 118, keep: [60, 28], r: 5.4 }, sucrose: { n: [3, 15], speed: 22, tau: .5, r: 14 } }
       });
       /* the counters start at zero when the step about crossing starts */
+      var ghosts = [];
       function rules(t, s) {
         if (t < 7) base.on = false;
         else if (!base.on) { var x = s.crossed('water'); base.ab = x.ab; base.ba = x.ba; base.on = true; }
+        ghosts = t >= 7.2 && t < 14.6 ? [[followW(t), 5.4], [followS(t), 14]] : [];
       }
+      /* the two ringed molecules are solid too: the others move aside for them, and stay on their own side of the membrane */
+      sim.onMove = function (s) {
+        ghosts.forEach(function (g) {
+          for (var i = 0; i < s.N; i++) {
+            if (s.TR[i]) continue;
+            var R = g[1] + s.RK[s.K[i]], dx = s.X[i] - g[0][0], dy = s.Y[i] - g[0][1], d2 = dx * dx + dy * dy;
+            if (d2 >= R * R || !d2) continue;
+            var d = Math.sqrt(d2), ux = dx / d, uy = dy / d, left = s.X[i] < W / 2, vn = s.VX[i] * ux + s.VY[i] * uy;
+            s.X[i] = g[0][0] + ux * R; s.Y[i] = Math.max(3, Math.min(H - 3, g[0][1] + uy * R));
+            s.X[i] = left ? Math.min(s.X[i], W / 2 - 2.5 * u) : Math.max(s.X[i], W / 2 + 2.5 * u);
+            if (vn < 0) { s.VX[i] -= 2 * vn * ux; s.VY[i] -= 2 * vn * uy; }
+          }
+        });
+      };
       /* the two molecules to follow in step 2: one water molecule crosses, one sucrose molecule hits the membrane and moves away */
-      function followW(t) { var k = ease(seg(t, 7.8, 12)); return [lerp(W / 2 - 150, W / 2 + 122, k), 92 + 9 * Math.sin(k * 7)]; }
+      function followW(t) {
+        var k = ease(seg(t, 7.8, 12)), x = lerp(W / 2 - 150, W / 2 + 122, k);
+        return [x, CH.lines[0] + 9 * clamp((Math.abs(x - W / 2) - 76) / 40) * Math.sin(k * 7)];   /* on the line of a channel while it crosses */
+      }
       function followS(t) {
         var a = ease(seg(t, 7.8, 10)), b = ease(seg(t, 10, 12.6));
-        return [lerp(lerp(W / 2 + 156, W / 2 + 2.5 * u + 16, a), W / 2 + 150, b), lerp(lerp(262, 240, a), 268, b)];
+        return [lerp(lerp(W / 2 + 156, W / 2 + 2.5 * u + 16, a), W / 2 + 150, b), lerp(lerp(262, 250, a), 268, b)];
       }
       return scene(sim, rules, {
         draw: function (c, t) {
@@ -364,6 +404,7 @@
             D.ground(c, 0, 0, W / 2, H, C.dilute[0], C.dilute[1]);
             D.ground(c, W / 2, 0, W / 2, H, C.conc[0], C.conc[1]);
             D.bilayer(c, W / 2, 0, H, u);
+            CH.lines.forEach(function (y) { D.channel(c, W / 2, y, u); });
             molsBy(c, sim, u, ['sucrose', 'water']);
             var f = seg(t, 7.2, 7.8) * (1 - seg(t, 14, 14.6));
             if (f > 0) {
@@ -377,7 +418,7 @@
               c.globalAlpha = 1;
             }
             var a = seg(t, 15.2, 16.6);
-            if (a > 0) { c.globalAlpha = a; D.arrow(c, W / 2 - 110, H / 2, W / 2 + 112, H / 2, 16, NET, { head: 24, headW: 19 }); c.globalAlpha = 1; }
+            if (a > 0) { c.globalAlpha = a; D.arrow(c, W / 2 - 110, 54, W / 2 + 112, 54, 16, NET, { head: 24, headW: 19 }); c.globalAlpha = 1; }
           });
         },
         labels: function (t) {
@@ -421,7 +462,7 @@
       { t: 29, h: 'Back in a dilute solution', p: [['ig', 'Water enters by **osmosis** again. The vacuole swells, the cell membrane returns to the wall, and the cell is **turgid** again.']] }
     ],
     make: function () {
-      var W = 560, H = 356, cell = { x: W / 2, y: H / 2 + 2, a: 186, b: 128, wall: 9, seed: 3, mitos: 4 }, T = 0;
+      var W = 560, H = 356, cell = { x: W / 2, y: H / 2 + 2, a: 186, b: 128, wall: 9, seed: 3, mitos: 4 }, T = 0, lastMitos = [];
       function geom(t) { return D.plantGeom(Object.assign({ water: waterIn(t) }, cell)); }
       function conc(t) { return t < 13 ? 0 : t < 13.8 ? seg(t, 13, 13.8) : t < 29 ? 1 : 1 - seg(t, 29, 29.8); }
       /* how wide the space between the cell wall and the cell membrane is, at the place it is named */
@@ -436,7 +477,7 @@
           var w = waterIn(t), k = conc(t), top = D.mixHex(C.dilute[0], C.conc[0], k), low = D.mixHex(C.dilute[1], C.conc[1], k);
           D.frame(c, 0, 0, W, H, 16, function () {
             D.ground(c, 0, 0, W, H, top, low);
-            var G = D.plantCell(c, Object.assign({ water: w, sap: clamp((1 - w) * 1.05) }, cell));
+            var G = D.plantCell(c, Object.assign({ water: w, sap: clamp((1 - w) * 1.05) }, cell)); lastMitos = G.mitos;
             /* the solution in the space: it has the colour of the solution outside */
             if (G.pl > .001) {
               c.save();
@@ -482,13 +523,17 @@
           /* the wall and the membrane from above, at the top of the cell; the vacuole and the cytoplasm from below */
           var top = function (ptsL, xWant) { var b = null; ptsL.forEach(function (p) { if (p[1] < cell.y && (!b || Math.abs(p[0] - xWant) < Math.abs(b[0] - xWant))) b = p; }); return b; };
           var bot = function (ptsL, xWant) { var b = null; ptsL.forEach(function (p) { if (p[1] > cell.y && (!b || Math.abs(p[0] - xWant) < Math.abs(b[0] - xWant))) b = p; }); return b; };
-          var pw = top(o, cell.x - 110), pm = top(m, cell.x + 118), pc = bot(m, cell.x + 110), pcv = bot(v, cell.x + 110);
+          var pw = top(o, cell.x - 60), pm = top(m, cell.x + 118);
+          /* the vacuole is the membrane drawn smaller from the middle, point by point, so the same point of each bounds the cytoplasm */
+          var ci = Math.round(m.length / 6), pc = m[ci], pcv = v[ci];
           var vx = v.map(function (p) { return p[0]; }), vy = v.map(function (p) { return p[1]; });
           var vx0 = Math.min.apply(null, vx), vx1 = Math.max.apply(null, vx), vy0 = Math.min.apply(null, vy), vy1 = Math.max.apply(null, vy);
           it.push({ id: 'wall', text: 'cell wall', x: pw[0], y: pw[1] + 4, side: 'T' });
           it.push({ id: 'mem', text: 'cell membrane', x: pm[0], y: pm[1], side: 'T' });
           it.push({ id: 'vac', text: 'vacuole', x: lerp(vx0, vx1, .36), y: lerp(vy0, vy1, .72), side: 'B' });
-          it.push({ id: 'cyt', text: 'cytoplasm', x: pc[0], y: lerp(pc[1], pcv[1], .5), side: 'B' });
+          it.push({ id: 'cyt', text: 'cytoplasm', x: lerp(pc[0], pcv[0], .5), y: lerp(pc[1], pcv[1], .5), side: 'B' });
+          it.push({ id: 'nuc', text: 'nucleus', x: G.nuc.x, y: G.nuc.y - G.nuc.r * .6, side: 'T' });
+          if (lastMitos.length) { var mb = lastMitos.reduce(function (a, b) { return b[1] > a[1] ? b : a; }); it.push({ id: 'mit', text: 'mitochondrion', x: mb[0], y: mb[1], side: 'B' }); }
           /* the space between the wall and the membrane is named as soon as it can be seen, and until it closes */
           if (gapAt(t) >= 6) { var qi = bot(G.inner, cell.x - 120), qm = bot(m, cell.x - 120); it.push({ id: 'sol', text: 'outside solution', x: qi[0], y: (qi[1] + qm[1]) / 2, side: 'B' }); }
           /* the solution round the cell */
@@ -514,19 +559,20 @@
     aria: 'A nitrate ion enters a protein carrier from the side of lower concentration. Energy from a mitochondrion changes the shape of the carrier, the ion is released on the side of higher concentration, and the carrier returns to its first shape.',
     pills: [['l', 'Lower concentration side:'], ['r', 'Higher concentration side:']],
     key: [['nitrate', 'nitrate ion'], ['carrier', 'protein carrier'], ['energy', 'energy from respiration', [1]], ['net', 'movement against the gradient', [2]]],
+    notes: [['The mitochondrion is drawn much smaller than it really is.']],
     M: [0, 6, 12, 18, 24],
     steps: [
       { t: 0, h: 'The ion attaches', p: [['ig', 'A **protein carrier** crosses the full width of the cell membrane. Its pocket faces the side of **lower concentration**. Follow the ringed **nitrate ion**: it moves into the pocket and attaches to the carrier.']] },
-      { t: 6, h: 'Energy changes its shape', p: [['ig', 'A **mitochondrion** releases **energy from respiration**. This energy changes the **shape** of the carrier, so the pocket now faces the side of **higher concentration**.'], ['ib', 'The immediate source of the energy is ATP, and the protein is called a pump (B2.1.7).']] },
+      { t: 6, h: 'Energy changes its shape', p: [['ig', 'A **mitochondrion** releases **energy from respiration**. This energy changes the **shape** of the carrier, so the pocket now faces the side of **higher concentration**.'], ['ib', 'The immediate source of the energy is ATP. A protein that uses ATP directly is called a pump (B2.1.7).'], ['bey', 'A root hair’s nitrate carrier uses this energy indirectly: pumps move hydrogen ions out of the cell, and each nitrate ion enters together with hydrogen ions.']] },
       { t: 12, h: 'The ion is released', p: [['ig', 'The ion leaves the carrier on the side where its concentration is **higher**. It has moved **against the concentration gradient**: this is **active transport**.']] },
       { t: 18, h: 'The carrier resets', p: [['ig', 'The carrier returns to its first shape, ready for the next ion. If **respiration stops**, no energy is released, and active transport stops.']] }
     ],
     make: function () {
       var W = 560, H = 340, u = 26, cx = W / 2, cy = H / 2, E = { x: W + 120, y: H + 96, r: 300 };
       var sim = Sim.make({
-        seed: 9, w: W, h: H,
+        seed: 9, w: W, h: H, hit: true,
         gate: { x: W / 2, hw: 2.5 * u, pass: function () { return 0; } },
-        kinds: { nitrate: { n: [4, 15], speed: 34, tau: .4 } }
+        kinds: { nitrate: { n: [4, 15], speed: 34, tau: .4, r: 6.5 } }
       });
       sim.onMove = keepClear(cx, cy, u, E);
       /* cause, then effect: the energy reaches the carrier, and then the carrier changes shape */
@@ -564,16 +610,16 @@
           });
         },
         labels: function (t) {
-          var it = [{ id: 'lo', text: 'outside the cell: lower concentration', x: 104, y: H - 18, side: 'B' },
-                    { id: 'hi', text: 'inside the cell: higher concentration', x: W - 110, y: 18, side: 'T' },
+          var it = [{ id: 'lo', text: 'outside the cell: lower concentration of nitrate ions', x: 104, y: H - 18, side: 'B', cls: 'lb--lo' },
+                    { id: 'hi', text: 'inside the cell: higher concentration of nitrate ions', x: W - 110, y: 18, side: 'T', cls: 'lb--hi' },
                     { id: 'mem', text: 'cell membrane', x: W / 2 - 40, y: 14, side: 'T' },
                     { id: 'car', text: 'protein carrier', x: cx - 40, y: cy + 54, side: 'B' }];
-          if (t >= 6.2) it.push({ id: 'mi', text: 'mitochondrion', x: 470, y: 250, side: 'B' });
+          it.push({ id: 'mi', text: 'mitochondrion', x: 470, y: 250, side: 'B' });
           return it;
         },
         read: function (t, pill) {
-          pill('l', (t < 3 ? 5 : 4) + ' ions', 'ok');
-          pill('r', (t < 14 ? 15 : 16) + ' ions', 'ok');
+          pill('l', (t < 3 ? 5 : 4) + ' ions', 'lo');
+          pill('r', (t < 14 ? 15 : 16) + ' ions', 'hi');
         }
       });
     }
@@ -627,5 +673,5 @@
     return box;
   });
 
-  global.MemFilms = { molsBy: molsBy, keepClear: keepClear, rootHairCell: rootHairCell, soil: soil, grain: grain };
+  global.MemFilms = { lanes: lanes, molsBy: molsBy, keepClear: keepClear, rootHairCell: rootHairCell, soil: soil, grain: grain };
 })(window);

@@ -102,7 +102,7 @@
     return function (t) {
       var seen = {};
       return labelsAt(t).filter(function (q) { if (all) return true; if (seen[q.id]) return false; seen[q.id] = 1; return true; }).map(function (q) {
-        var p = lay().to(q.x, q.y), o = { id: q.id, text: q.text, x: p[0], y: p[1], side: q.side, pri: q.pri };
+        var p = lay().to(q.x, q.y), o = { id: q.id, text: q.text, x: p[0], y: p[1], side: q.side, pri: q.pri, cls: q.cls };
         if (q.alts) o.alts = q.alts.map(function (a) { return lay().to(a[0], a[1]); });
         if (q.was) o.was = q.was;
         return o;
@@ -201,6 +201,8 @@
     ion: '<circle fill="#7EDB6B" cx="14" cy="7" r="3.6"/>',
     lipid: '<circle fill="#E9B66D" cx="6" cy="7" r="4.2"/><path stroke="#F7E7C4" stroke-width="1.4" fill="none" d="M9.5 5.3C14 4 18 6.6 25 5.4M9.5 8.7C14 10.2 18 7.6 25 9.3"/>',
     carrier: '<path fill="#37D3B0" d="M4 7C4 3.2 9 1.5 14 1.5S24 3.2 24 7c-3.5-.9-6.5-1.1-10-1.1S7.5 6.1 4 7z"/><path fill="#22A98D" d="M4 7c0 3.8 5 5.5 10 5.5S24 10.8 24 7c-3.5.9-6.5 1.1-10 1.1S7.5 7.9 4 7z"/>',
+    crossing: '<circle cx="14" cy="7" r="5.9" fill="none" stroke="#FFF0BE" stroke-width="1.3"/><circle fill="#E6EEF5" cx="12.2" cy="8.4" r="1.4"/><circle fill="#E6EEF5" cx="15.8" cy="8.4" r="1.4"/><circle fill="#FF7468" cx="14" cy="6.6" r="2.3"/>',
+    channel: '<path fill="#4FA8DE" d="M3 2.6Q3 1.5 4.2 1.5H23.8Q25 1.5 25 2.6V5.2C21 5.2 18 6.2 14 6.2S7 5.2 3 5.2Z"/><path fill="#2E86BE" d="M3 11.4Q3 12.5 4.2 12.5H23.8Q25 12.5 25 11.4V8.8C21 8.8 18 7.8 14 7.8S7 8.8 3 8.8Z"/>',
     energy: '<circle fill="#FFE680" cx="14" cy="7" r="5"/><circle fill="#FFF7CF" cx="14" cy="7" r="2.3"/>',
     hbond: '<path fill="none" stroke="#D6F0FF" stroke-width="1.7" stroke-dasharray="2.6 2.6" d="M3 7H25"/>',
     /* the arrows: the net movement (one wide arrow), and the crossings each way (two thin ones) */
