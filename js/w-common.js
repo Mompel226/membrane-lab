@@ -371,21 +371,41 @@
     for (i = 0; i < n; i++) if (c[i] - w[i] / 2 < lo - 1e-6 || (i && c[i] - c[i - 1] < (w[i - 1] + w[i]) / 2 + gap - 1e-6)) return null;
     return c;
   }
+  /* the middles of boxes of widths w in order, each inside its own reach A[i] … B[i] (the band, and over its own line),
+     a clear gap apart, as near the middles c0 as that allows; null when no such places exist. The least-squares spread
+     moves two crowded names apart equally, and a short name could then leave its line while a long one had room to
+     spare (Membrane Lab, 27 Nov 2026: "soil grain" and "nucleus"; the band then wrapped every name to six letters, and
+     "air space, with oxygen" stood in four lines in a band of two, cut by the picture's edge) */
+  function reach(c0, w, gap, A, B) {
+    var n = w.length, lo = [], hi = [], c = [], i, d = function (j) { return (w[j - 1] + w[j]) / 2 + gap; };
+    for (i = 0; i < n; i++) lo[i] = Math.max(A[i], i ? lo[i - 1] + d(i) : -Infinity);
+    for (i = n - 1; i >= 0; i--) hi[i] = Math.min(B[i], i < n - 1 ? hi[i + 1] - d(i + 1) : Infinity);
+    for (i = 0; i < n; i++) if (lo[i] > hi[i] + 1e-6) return null;
+    for (i = 0; i < n; i++) c[i] = Math.min(hi[i], Math.max(c0[i], lo[i], i ? c[i - 1] + d(i) : -Infinity));
+    return c;
+  }
   /* one band's names: each wrapped as wide as the band allows (fewest lines), its middle as near its part as the others
      allow, and its own line under it. Returns { at: [{ it, lines, c, w }], lines (the most of any name), fits }; when no
      wrapping fits, a name beyond 0610 (`opt`) is left out first, and failing that the narrowest wrapping is returned with
-     fits false (the figure then uses numbered pins). */
+     fits false (the figure then uses numbered pins). o.lines: the lines the band holds; a name is never wrapped into
+     more lines than that while its words allow (a line past the band is cut by the picture's edge). o.measure(line,
+     font, cls): a line's real width; without it a letter is CH of the font, which is a third too wide for most words, so
+     a line could end beside its name while the band thought it stood under it (Membrane Lab, 27 Nov 2026). */
   function band(items, o) {
-    var font = o.font || 16, gap = o.gap == null ? font * 1.2 : o.gap;
+    var font = o.font || 16, gap = o.gap == null ? font * 1.2 : o.gap, cap = o.lines || 0;
+    var meas = o.measure ? function (s, x) { return o.measure(s, font, x.cls); } : function (s) { return s.length * font * CH; };
     var lo = o.bandL == null ? o.left : o.bandL, hi = o.bandR == null ? o.right : o.bandR;
     var it = items.slice().sort(function (a, b) { return (a.mid != null ? a.mid : a.x) - (b.mid != null ? b.mid : b.x); });
     if (!it.length) return { at: [], lines: 0, fits: true };
     var longest = it.reduce(function (n, x) { return Math.max(n, String(x.text).split(' ').reduce(function (k, wd) { return Math.max(k, wd.length); }, 0)); }, 1);
     function tryWrap(n) {
-      var L = it.map(function (x) { return wrapCh(x.text, n); });
-      var w = L.map(function (ls) { return ls.reduce(function (k, s) { return Math.max(k, s.length); }, 0) * font * CH; });
+      var L = it.map(function (x) { var ls = wrapCh(x.text, n); for (var k = n + 1; cap && ls.length > cap && k <= String(x.text).length; k++) ls = wrapCh(x.text, k); return ls; });
+      var w = L.map(function (ls, i) { return ls.reduce(function (k, s) { return Math.max(k, meas(s, it[i])); }, 0); });
       var c = spread(it.map(function (x) { return x.mid != null ? x.mid : x.x; }), w, gap, lo, hi);
-      var ok = !!c && it.every(function (x, i) { var e = Math.min(w[i] / 2, font * .45); return x.x >= c[i] - w[i] / 2 + e - 1e-6 && x.x <= c[i] + w[i] / 2 - e + 1e-6; });
+      var e = w.map(function (wi) { return Math.min(wi / 2, font * .45); });
+      var A = it.map(function (x, i) { return Math.max(lo + w[i] / 2, x.x - w[i] / 2 + e[i]); }), B = it.map(function (x, i) { return Math.min(hi - w[i] / 2, x.x + w[i] / 2 - e[i]); });
+      var ok = !!c && it.every(function (x, i) { return c[i] >= A[i] - 1e-6 && c[i] <= B[i] + 1e-6; });
+      if (!ok) { var c2 = reach(c || it.map(function (x) { return x.mid != null ? x.mid : x.x; }), w, gap, A, B); if (c2) { c = c2; ok = true; } }
       return { at: it.map(function (x, i) { return { it: x, lines: L[i], c: c ? c[i] : (x.mid != null ? x.mid : x.x), w: w[i] }; }),
                lines: L.reduce(function (k, ls) { return Math.max(k, ls.length); }, 0), fits: ok };
     }
@@ -401,7 +421,7 @@
     if (!items.length) return '';
     var font = o.font || 16, lh = font * 1.18, out = '';
     /* the band's own gap between names (o.gap is the margins' gap between rows) */
-    var B = band(items, { font: font, bandL: o.bandL, bandR: o.bandR, left: o.left, right: o.right });
+    var B = band(items, { font: font, bandL: o.bandL, bandR: o.bandR, left: o.left, right: o.right, lines: o.lines, measure: o.measure });
     B.at.forEach(function (a) {
       var x = a.it, nl = a.lines.length;
       var top = side === 'T' ? y - font * .25 - nl * lh : y + font * .25, b0 = top + font * .84;

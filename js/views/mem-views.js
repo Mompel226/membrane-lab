@@ -711,7 +711,7 @@
 
   /* ======================================================================= A plant cell and an animal cell */
   Views.add('twocells', function (spec, ctx) {
-    var W = 560, H = 330, liquid = 'water', k = 0, foc = null, lastMitos = [];   /* k: 0 at rest → 1 at the end of the change */
+    var W = 560, H = 330, liquid = 'water', k = 0, foc = null, lastMitos = [], cytI = -1;   /* k: 0 at rest → 1 at the end of the change */
     var P = { x: 136, y: 168, a: 112, b: 104, wall: 8, seed: 3, mitos: 3 }, A = { x: 420, y: 168, r: 84, seed: 2 };
     function plantWater() { return liquid === 'water' ? lerp(.72, 1, k) : lerp(.72, .14, k); }
     function animal() {
@@ -762,18 +762,32 @@
         /* each part of the plant cell is named on the part itself, wherever it is now (Daniel, 25 Nov 2026: "the yellow bit is
            not the cytoplasm ... the pink thing is the vacuole ... that's not well labeled") */
         var near = function (pts, xw, up) { var b = null; pts.forEach(function (p) { if ((up ? p[1] < P.y : p[1] > P.y) && (!b || Math.abs(p[0] - xw) < Math.abs(b[0] - xw))) b = p; }); return b; };
-        var it = [{ id: 'p', text: 'plant cell', x: P.x - 50, y: 6, side: 'T' }];
-        var pm = near(G.mem, P.x + 58, true), ci = Math.round(G.mem.length / 6), pc = G.mem[ci], pcv = G.vac[ci], pw = near(G.outer, P.x - 84, false);
+        /* the two cells' titles are headings over their cells; the plant cell's membrane is named at its top right corner,
+           the outside solution in the space at the top left, beside the nucleus; from below, the wall at its lower left
+           corner, the vacuole left of the middle and the cytoplasm at the lower right, clear of the mitochondria (27 Nov
+           2026: in a short window four names over the plant cell could not all stand over their own lines, and the
+           cytoplasm's line ended on a mitochondrion) */
+        var it = [{ id: 'p', text: 'plant cell', x: P.x, y: 6, side: 'T', head: true }];
+        /* the cytoplasm: of the places on its lower right, the one whose line, straight down to its name, passes furthest
+           from every mitochondrion (they move as the cell changes); the line moves only when another place is clearly better */
+        var n = G.mem.length, mid = function (i) { return [(G.mem[i][0] + G.vac[i][0]) / 2, (G.mem[i][1] + G.vac[i][1]) / 2]; };
+        var clear = function (i) { var q = mid(i), m = 1e9; lastMitos.forEach(function (o) { m = Math.min(m, o[1] > q[1] - 12 ? Math.abs(o[0] - q[0]) : Math.hypot(o[0] - q[0], o[1] - q[1])); }); return m; };
+        var ci = -1, cs = -1;
+        for (var i = Math.round(n / 24); i <= Math.round(n / 4); i++) if (mid(i)[0] >= P.x + 35) { var v = clear(i); if (v > cs) { cs = v; ci = i; } }
+        if (ci < 0) ci = Math.round(n / 12);
+        if (cytI >= 0 && cytI < n && mid(cytI)[0] >= P.x + 35 && clear(cytI) > cs - 3) ci = cytI;
+        cytI = ci;
+        var pm = near(G.mem, P.x + 85, true), pc = G.mem[ci], pcv = G.vac[ci], pw = near(G.outer, P.x - 100, false);
         it.push({ id: 'pm', text: 'cell membrane', x: pm[0], y: pm[1], side: 'T' });
-        it.push({ id: 'pv', text: 'vacuole', x: P.x + 8, y: P.y + 22, side: 'B' });
+        it.push({ id: 'pv', text: 'vacuole', x: P.x - 20, y: P.y + 22, side: 'B' });
         it.push({ id: 'pc', text: 'cytoplasm', x: (pc[0] + pcv[0]) / 2, y: (pc[1] + pcv[1]) / 2, side: 'B' });
         it.push({ id: 'pn', text: 'nucleus', x: G.nuc.x, y: G.nuc.y - G.nuc.r * .6, side: 'T' });
         it.push({ id: 'pw', text: 'cell wall', x: pw[0], y: pw[1] - 3, side: 'B' });
         /* when the cell membrane has left the wall, the outside solution in the space between them */
-        if (G.pl > .25) { var gi = near(G.inner, P.x + 10, true), gm = near(G.mem, P.x + 10, true); it.push({ id: 'ps', text: 'outside solution', x: gi[0], y: (gi[1] + gm[1]) / 2, side: 'T' }); }
+        if (G.pl > .25) { var gi = near(G.inner, P.x - 90, true), gm = near(G.mem, P.x - 90, true); it.push({ id: 'ps', text: 'outside solution', x: gi[0], y: (gi[1] + gm[1]) / 2, side: 'T' }); }
         /* the caption says that only one has a cell wall: a name too long for its band is cut, and "cell wall" alone would be false */
-        if (a.burst < .5) { it.push({ id: 'a', text: 'animal cell', x: A.x, y: 6, side: 'T' }); it.push({ id: 'am', text: 'cell membrane', x: A.x + 20, y: A.y + A.r * a.swell * .92, side: 'B' }); }
-        else it.push({ id: 'a', text: 'the animal cell has burst', x: A.x, y: 6, side: 'T' });
+        if (a.burst < .5) { it.push({ id: 'a', text: 'animal cell', x: A.x, y: 6, side: 'T', head: true }); it.push({ id: 'am', text: 'cell membrane', x: A.x + 20, y: A.y + A.r * a.swell * .92, side: 'B' }); }
+        else it.push({ id: 'a', text: 'the animal cell has burst', x: A.x, y: 6, side: 'T', head: true });
         return it;
       },
       read: function (pill) {
@@ -784,7 +798,7 @@
       }
     };
     var V = MV({
-      scene: scene, liveNames: true, aria: 'A plant cell and an animal cell in the same liquid. In pure water the plant cell becomes turgid and the animal cell swells and bursts; in a concentrated solution the plant cell is plasmolysed and the animal cell shrinks.',
+      scene: scene, liveNames: true, heads: true, aria: 'A plant cell and an animal cell in the same liquid. In pure water the plant cell becomes turgid and the animal cell swells and bursts; in a concentrated solution the plant cell is plasmolysed and the animal cell shrinks.',
       barLabel: 'The liquid', buttons: [['water', 'In pure water'], ['conc', 'In a concentrated solution']],
       read: [['s', 'Liquid:'], ['p', 'Plant cell:'], ['a', 'Animal cell:']],
       key: { all: [['net', 'net movement of water'], ['press', 'turgor pressure']], sets: [['net movement of water', 'turgor pressure']],

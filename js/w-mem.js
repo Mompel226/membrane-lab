@@ -519,25 +519,37 @@
         },
         labels: function (t) {
           var G = geom(t), it = [], o = G.outer, m = G.mem, v = G.vac;
-          /* each name on its own part: the wall at the top left, the membrane, the vacuole, the cytoplasm */
-          /* the wall and the membrane from above, at the top of the cell; the vacuole and the cytoplasm from below */
+          /* each name on its own part, at a place that leaves each band's names room to stand over their own lines in every
+             step (27 Nov 2026: plasmolysed, the wall's line ran beside the nucleus's, and the outside solution's stood under
+             "mitochondrion"): from above the nucleus, the wall right of the middle, the membrane, and the outside solution
+             in the space at the top left; from below the mitochondrion, the vacuole, the cytoplasm and the solution round
+             the cell */
           var top = function (ptsL, xWant) { var b = null; ptsL.forEach(function (p) { if (p[1] < cell.y && (!b || Math.abs(p[0] - xWant) < Math.abs(b[0] - xWant))) b = p; }); return b; };
           var bot = function (ptsL, xWant) { var b = null; ptsL.forEach(function (p) { if (p[1] > cell.y && (!b || Math.abs(p[0] - xWant) < Math.abs(b[0] - xWant))) b = p; }); return b; };
-          var pw = top(o, cell.x - 60), pm = top(m, cell.x + 118);
-          /* the vacuole is the membrane drawn smaller from the middle, point by point, so the same point of each bounds the cytoplasm */
-          var ci = Math.round(m.length / 6), pc = m[ci], pcv = v[ci];
+          /* the wall's top edge at x itself (its points stand far apart there, and the nearest one was beside an arrow) */
+          var edge = function (ptsL, x) {
+            for (var i = 0; i < ptsL.length; i++) {
+              var a = ptsL[i], b = ptsL[(i + 1) % ptsL.length];
+              if (a[1] < cell.y && b[1] < cell.y && (a[0] - x) * (b[0] - x) <= 0 && a[0] !== b[0]) return [x, lerp(a[1], b[1], (x - a[0]) / (b[0] - a[0]))];
+            }
+            return top(ptsL, x);
+          };
+          var pw = edge(o, cell.x + 40), pm = top(m, cell.x + 118);
+          /* the vacuole is the membrane drawn smaller from the middle, point by point, so the same point of each bounds the
+             cytoplasm; this one, a little left of the lower right mitochondrion, stays clear of every mitochondrion */
+          var ci = Math.round(m.length * 14 / 72), pc = m[ci], pcv = v[ci];
           var vx = v.map(function (p) { return p[0]; }), vy = v.map(function (p) { return p[1]; });
           var vx0 = Math.min.apply(null, vx), vx1 = Math.max.apply(null, vx), vy0 = Math.min.apply(null, vy), vy1 = Math.max.apply(null, vy);
           it.push({ id: 'wall', text: 'cell wall', x: pw[0], y: pw[1] + 4, side: 'T' });
           it.push({ id: 'mem', text: 'cell membrane', x: pm[0], y: pm[1], side: 'T' });
-          it.push({ id: 'vac', text: 'vacuole', x: lerp(vx0, vx1, .36), y: lerp(vy0, vy1, .72), side: 'B' });
+          it.push({ id: 'vac', text: 'vacuole', x: lerp(vx0, vx1, .62), y: lerp(vy0, vy1, .72), side: 'B' });
           it.push({ id: 'cyt', text: 'cytoplasm', x: lerp(pc[0], pcv[0], .5), y: lerp(pc[1], pcv[1], .5), side: 'B' });
           it.push({ id: 'nuc', text: 'nucleus', x: G.nuc.x, y: G.nuc.y - G.nuc.r * .6, side: 'T' });
           if (lastMitos.length) { var mb = lastMitos.reduce(function (a, b) { return b[1] > a[1] ? b : a; }); it.push({ id: 'mit', text: 'mitochondrion', x: mb[0], y: mb[1], side: 'B' }); }
           /* the space between the wall and the membrane is named as soon as it can be seen, and until it closes */
-          if (gapAt(t) >= 6) { var qi = bot(G.inner, cell.x - 120), qm = bot(m, cell.x - 120); it.push({ id: 'sol', text: 'outside solution', x: qi[0], y: (qi[1] + qm[1]) / 2, side: 'B' }); }
+          if (gapAt(t) >= 6) { var qi = top(G.inner, cell.x - 120), qm = top(m, cell.x - 120); it.push({ id: 'sol', text: 'outside solution', x: qi[0], y: (qi[1] + qm[1]) / 2, side: 'T' }); }
           /* the solution round the cell */
-          it.push({ id: 'out', text: t >= 13 && t < 29 ? 'concentrated solution' : 'dilute solution', x: W - 62, y: 22, side: 'T' });
+          it.push({ id: 'out', text: t >= 13 && t < 29 ? 'concentrated solution' : 'dilute solution', x: W - 62, y: H - 22, side: 'B' });
           return it;
         },
         read: function (t, pill) {
@@ -560,6 +572,9 @@
     pills: [['l', 'Lower concentration side:'], ['r', 'Higher concentration side:']],
     key: [['nitrate', 'nitrate ion'], ['carrier', 'protein carrier'], ['energy', 'energy from respiration', [1]], ['net', 'movement against the gradient', [2]]],
     notes: [['The mitochondrion is drawn much smaller than it really is.']],
+    /* its two concentrations are the longest names in the lab: bands of three lines, as the station's own picture
+       (27 Nov 2026: in a 1366 px window "outside the cell: lower concentration of nitrate ions" ran over "protein carrier") */
+    lines: 3,
     M: [0, 6, 12, 18, 24],
     steps: [
       { t: 0, h: 'The ion attaches', p: [['ig', 'A **protein carrier** crosses the full width of the cell membrane. Its pocket faces the side of **lower concentration**. Follow the ringed **nitrate ion**: it moves into the pocket and attaches to the carrier.']] },

@@ -6,7 +6,8 @@
 
    MemFilm(cfg)   a step animation in its own card (WKit: shell, timeline, stepper, mount). While a step waits for the
                   reader the particles go on moving: particles never stop, at equilibrium either (0610 3.1.1). With Reduce
-                  motion nothing moves and each step shows one still with every name.
+                  motion nothing moves and each step shows one still with every name. cfg.lines: 3 for bands that hold
+                  three lines (names too long for two, as MemView's o.lines).
    MemView(o)     a station's left picture, with its own buttons and read-outs, running while it is on the screen.
 
    A scene is { W, H, seek(t), to(t), idle(dt), draw(c, t, lay), labels(t), read?(t, pill) }: every frame is worked out from
@@ -21,9 +22,9 @@
   /* The picture takes the whole width of its column, and its names stand in a band above it and a band below it, each
      joined to its part by one upright line that ends ON the part (Daniel, 5 Nov 2026: "put it at the top if you need it").
      Upright lines at different places cannot cross. On a phone each name is a numbered pin, with the words in a key. */
-  function frame(svg, bg, W, H, D, narrow, px, aspect, lines) {
-    var f = px * (W + 4) / D, band = narrow ? f * 1.7 : f * (.59 + 1.18 * (lines || 2)) + 3;
-    var vb = { x: -2, y: -band, w: W + 4, h: H + 2 * band, bw: W, bh: H, ex: 0 };
+  function frame(svg, bg, W, H, D, narrow, px, aspect, lines, heads) {
+    var f = px * (W + 4) / D, band = narrow ? f * 1.7 : f * (.59 + 1.18 * (lines || 2)) + 3, hd = heads && !narrow ? f * 1.3 : 0;
+    var vb = { x: -2, y: -band - hd, w: W + 4, h: H + 2 * band + hd, bw: W, bh: H, ex: 0, hd: hd };
     /* aspect: the figure's shape (width over height). A picture made smaller by the height of its column stands in the
        middle of the figure, and the width beside it is its names' (25 Nov 2026: at 1101 to 1366 px in a short window the
        long names, "higher concentration of nitrate ions", were cut or ran over each other in bands as narrow as the drawing) */
@@ -44,7 +45,51 @@
     }
     return t;
   }
+  /* a name's real width, in the font its own class gives it (a higher or lower concentration is bolder), read from a
+     name drawn for a moment off the page, and measured once at 100 px. A width is kept only once the page's own font has
+     loaded, and every picture places its names again when it has (27 Nov 2026: measured in the stand-in font, a name a
+     tenth narrower than its drawing stood past the picture's edge, "ir space, with oxygen") */
+  var MC = null, MW = {}, MF = {}, AGAIN = [];
+  function whenFonts(fn) { AGAIN.push(fn); }
+  if (document.fonts && document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', function () {
+    MW = {};
+    AGAIN = AGAIN.filter(function (fn) { return fn() !== false; });
+  });
+  function fontOf(hl) {
+    var k = hl === 'head' ? 'head' : hl ? 'hl' : 'n';
+    if (MF[k]) return MF[k];
+    var NS = 'http://www.w3.org/2000/svg', sv = document.createElementNS(NS, 'svg'), g = document.createElementNS(NS, 'g'), t = document.createElementNS(NS, 'text');
+    sv.setAttribute('aria-hidden', 'true'); sv.style.cssText = 'position:absolute;left:-9999px;width:10px;height:10px';
+    g.setAttribute('class', 'lb' + (hl === true ? ' lb--hi' : '')); t.setAttribute('class', hl === 'head' ? 'cellv__head' : 'lb__txt'); t.textContent = 'x';
+    g.appendChild(t); sv.appendChild(g); document.body.appendChild(sv);
+    var cs = global.getComputedStyle(t), f = (cs.fontWeight || 500) + ' 100px ' + (cs.fontFamily || 'sans-serif');
+    document.body.removeChild(sv);
+    return (MF[k] = f);
+  }
+  function measure(t, font, cls) {
+    var hl = cls === 'head' ? 'head' : /lb--(hi|lo)/.test(cls || ''), k = (hl === 'head' ? 'H|' : hl ? 'h|' : 'n|') + t, v = MW[k];
+    if (v == null) {
+      if (!MC) MC = document.createElement('canvas').getContext('2d');
+      var fnt = fontOf(hl);
+      MC.font = fnt;
+      v = MC.measureText(String(t)).width / 100;
+      if (!document.fonts || !document.fonts.check || document.fonts.check(fnt.replace('100px', '16px'))) MW[k] = v;
+    }
+    return v * font;
+  }
+  /* heads: the title of a whole thing in the picture ("plant cell", "animal cell"), in a row of its own above the names,
+     over the middle of its thing and with no line, as a photograph's headings (27 Nov 2026: in a short window the plant
+     cell's title, the nucleus, the outside solution and the cell membrane could not all stand over their own lines) */
+  function headsSvg(lay, heads) {
+    var vb = lay.vb, f = lay.f, lo = vb.x + 4, hi = vb.x + vb.w - 4;
+    return heads.map(function (q) {
+      var w = measure(q.text, f, 'head') * 1.06, x = Math.max(lo + w / 2, Math.min(hi - w / 2, q.x));
+      return '<text class="cellv__head" x="' + K.n1(x) + '" y="' + K.n1(vb.y + f * 1.02) + '" text-anchor="middle" style="font-size:' + K.n1(f) + 'px">' + L.esc(q.text) + '</text>';
+    }).join('');
+  }
   function putNames(lay, items, narrow, key, lines) {
+    var heads = narrow || !lay.vb.hd ? [] : items.filter(function (q) { return q.head; });
+    if (heads.length) items = items.filter(function (q) { return !q.head; });
     var vb = lay.vb, ex = vb.ex || 0, o = { items: items, left: -2, right: vb.bw + 2, font: lay.f, top: vb.y + 4, bottom: vb.y + vb.h - 4, bandT: -3, bandB: vb.bh + 3, bandL: 2 - ex, bandR: vb.bw - 2 + ex };
     if (narrow) {
       var P = L.pinLabels(Object.assign({}, o, { gap: 4 }));
@@ -53,7 +98,18 @@
     }
     if (key) key.hidden = true;
     o.items = items.map(function (q) { return Object.assign({}, q, { text: tied(q.text, lines > 2) }); });
-    return L.labels(Object.assign({}, o, { gap: 6, width: 150 }));
+    /* a band whose names cannot all stand clear of each other at this size has them a little smaller, down to .875 of
+       their size (12.25 px on the screen or more), before any would run over another (27 Nov 2026: in a 1101 px window
+       the carrier film's three bottom names, the longest "outside the cell: lower concentration of nitrate ions") */
+    var f0 = lay.f, f = f0, nl = lines || 2;
+    function fits(ff) {
+      return ['T', 'B'].every(function (sd) {
+        var it = o.items.filter(function (q) { return q.side === sd && !q.hidden; });
+        return !it.length || L.labelBand(it, { font: ff, bandL: o.bandL, bandR: o.bandR, left: o.left, right: o.right, lines: nl, measure: measure }).fits;
+      });
+    }
+    if (!fits(f0)) { f = f0; for (var k = 1; k <= 5; k++) if (fits(f0 * (1 - .025 * k))) { f = f0 * (1 - .025 * k); break; } }
+    return L.labels(Object.assign({}, o, { font: f, gap: 6, width: 150, lines: nl, measure: measure })) + headsSvg(lay, heads);
   }
 
   /* the canvas under an svg: both show the same model units */
@@ -97,7 +153,7 @@
         if (still || exact) { scene.seek(t); exact = false; } else scene.to(t);
         canvasOnly(t);
         var items = L.stillItems(still, itemsAt, itemsAt(tt), tt, memo, narrow + '|' + lay.f);
-        gLab.innerHTML = putNames(lay, items, narrow, key);
+        gLab.innerHTML = putNames(lay, items, narrow, key, cfg.lines);
         if (scene.read) scene.read(t, S.pill);
         if (!raf && !still && !L.still() && !global.__memFreeze) raf = requestAnimationFrame(amble);
       }
@@ -118,19 +174,25 @@
         raf = requestAnimationFrame(amble);
       }
       sp = L.stepper({ steps: K.readerSteps(cfg.steps, TL.R), end: TL.end, render: draw, flow: TL.flow, stills: K.stillsOf(cfg.steps, TL) });
-      var box = K.mount(S, sp, 'mf', cfg.key ? [{ key: cfg.key }].concat(cfg.notes || []) : (cfg.notes || []), function (Dw, nar) {
+      var box = K.mount(S, sp, 'mf', cfg.key ? [{ key: cfg.key }].concat(cfg.notes || []) : (cfg.notes || []), function (Dw, nar, room) {
         narrow = nar;
-        lay = frame(svg, bg, scene.W, scene.H, Dw, nar, 14.5);
+        lay = frame(svg, bg, scene.W, scene.H, Dw, nar, 14.5, 0, cfg.lines);
+        /* room: the height the picture's column leaves it (WKit.mount). A taller drawing is made smaller to fit, in the
+           middle of the width, and its names keep their size and may stand in the width beside it (as MemView's) */
+        var want = Dw * lay.vb.h / lay.vb.w;
+        if (room >= 120 && room < want - 1) lay = frame(svg, bg, scene.W, scene.H, room * lay.vb.w / lay.vb.h, nar, 14.5, Dw / room, cfg.lines);
       });
-      var seek0 = box.__seek;
+      var seek0 = box.__seek, wasIn = false;
       box.__seek = function (t) { exact = true; return seek0(t); };
+      whenFonts(function () { if (box.isConnected) { wasIn = true; sp.paint(sp.time()); return true; } return !wasIn; });
       return box;
     };
   }
 
   /* ---------- a station's left picture ----------
      o = { scene, cls?, buttons?: [[id, label]], say(state)?, read?: [[key, label, icon?, words behind the icon?]], cL, cR,
-         lines? (3: bands that hold three lines, for names too long for two),
+         lines? (3: bands that hold three lines, for names too long for two), heads? (a row of headings above the names:
+         the scene's labels marked head: true),
          key?: { all: [[kind, name], …], sets: [[name, …], …] (what each state shows), now() (the names shown now) } }
      returns { el, setButtons(id), repaint(), labels(), stage: ... } for a view to wrap in Views.add */
   function MemView(o) {
@@ -195,20 +257,20 @@
       lastKey = key; narrow = rw < 440;
       var cs = global.getComputedStyle(root), pad = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom), gap = parseFloat(cs.rowGap) || 6;
       var room = H0 - pad - (bar.hidden ? 0 : bar.offsetHeight + gap) - (keyEl ? keyEl.offsetHeight + gap : 0) - (o.read ? read.offsetHeight + gap : 0) - (pk.hidden ? 0 : pk.offsetHeight + gap);
-      lay = frame(svg, bg, scene.W, scene.H, rw, narrow, 14, 0, o.lines);
+      lay = frame(svg, bg, scene.W, scene.H, rw, narrow, 14, 0, o.lines, o.heads);
       var want = rw * lay.vb.h / lay.vb.w;
       /* on a phone the picture scrolls with the page, whatever its height; in a column it fits the room there is */
       var fits = (global.matchMedia && global.matchMedia('(max-width: 1000px)').matches) || room < 120 ? want : Math.min(room, want);
       fig.style.height = Math.round(fits) + 'px';
       /* a picture limited by the height of its column: the names keep their size on the screen all the same, and may stand
          in the width beside the drawing */
-      if (fits < want - 1) lay = frame(svg, bg, scene.W, scene.H, fits * lay.vb.w / lay.vb.h, narrow, 14, rw / fits, o.lines);
+      if (fits < want - 1) lay = frame(svg, bg, scene.W, scene.H, fits * lay.vb.w / lay.vb.h, narrow, 14, rw / fits, o.lines, o.heads);
       return true;
     }
     function names() {
       if (!lay) return;
       var items = scene.labels().map(function (q) {
-        var p = lay.to(q.x, q.y), it = { id: q.id, text: q.text, x: p[0], y: p[1], side: q.side, pri: q.pri, cls: q.cls };
+        var p = lay.to(q.x, q.y), it = { id: q.id, text: q.text, x: p[0], y: p[1], side: q.side, pri: q.pri, cls: q.cls, head: q.head };
         if (q.alts) it.alts = q.alts.map(function (a) { return lay.to(a[0], a[1]); });
         return it;
       });
@@ -240,8 +302,9 @@
       }
       raf = requestAnimationFrame(loop);
     }
-    var ro = global.ResizeObserver ? new ResizeObserver(function () { if (root.isConnected) full(); }) : null;
+    var ro = global.ResizeObserver ? new ResizeObserver(function () { if (root.isConnected) full(); }) : null, wasIn = false;
     if (ro) ro.observe(root);
+    whenFonts(function () { if (root.isConnected) { wasIn = true; full(); return true; } return !wasIn; });
     return {
       el: root, pill: pill, names: names, paint: paint, full: full,
       press: function (id) { Object.keys(btn).forEach(function (k) { btn[k].setAttribute('aria-pressed', k === id ? 'true' : 'false'); }); },

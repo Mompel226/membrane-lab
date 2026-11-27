@@ -257,19 +257,34 @@
     if (sp.legend) { var side = h('div', cls + '__side'); side.appendChild(sp.legend); side.appendChild(sp.list); wrap.appendChild(side); }
     else wrap.appendChild(sp.list);
     S.box.appendChild(wrap);
-    var lastD = 0, lastN = false;
+    var lastD = 0, lastN = false, lastR = 0, hostSeen = null;
+    /* in the picture's column the drawing may be no taller than the column leaves it under its title and above its key,
+       so the whole picture and its key are seen without scrolling (Daniel, 27 Nov 2026: "I have to scroll a little bit
+       down to see the key ... I don't see then the top"); 0 anywhere else, where the drawing is as tall as its width makes it */
+    function roomOf() {
+      var hs = pack.parentNode;
+      if (!hs || !pack.classList.contains('is-onstage')) return 0;
+      var cs = global.getComputedStyle(hs);
+      return Math.floor(hs.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom) - (pack.offsetHeight - S.svg.getBoundingClientRect().height)) - 2;
+    }
     function fit() {
       var ww = wrap.getBoundingClientRect().width; if (!ww) return;
       wrap.classList.toggle(cls + '--side', ww >= 980);
-      var D = S.fig.getBoundingClientRect().width, narrow = ww < 440;
-      if (!D || (Math.abs(D - lastD) < 2 && narrow === lastN)) return;
-      lastD = D; lastN = narrow; setLayout(D, narrow); sp.paint(sp.time()); sizeKey();
+      var D = S.fig.getBoundingClientRect().width, narrow = ww < 440, R = roomOf();
+      if (!D || (Math.abs(D - lastD) < 2 && narrow === lastN && Math.abs(R - lastR) < 2)) return;
+      lastD = D; lastN = narrow; lastR = R; setLayout(D, narrow, R); sp.paint(sp.time()); sizeKey();
     }
     setLayout(700, false);
     var ro = global.ResizeObserver ? new ResizeObserver(function () { if (!S.box.isConnected) { ro.disconnect(); return; } fit(); }) : null;
     if (ro) { ro.observe(wrap); ro.observe(S.fig); }
     var stg = L.stage ? L.stage({ box: S.box, spec: S.spec, pack: pack, home: left, watch: function () { return S.box; },
-      onPlace: function (inColumn) { packT.hidden = !inColumn; S.box.classList.toggle(cls + '--staged', inColumn); sp.compact(inColumn); lastD = 0; fit(); } }) : null;
+      onPlace: function (inColumn) {
+        packT.hidden = !inColumn; S.box.classList.toggle(cls + '--staged', inColumn); sp.compact(inColumn);
+        /* the column's height can change while the drawing stands in it (the window, the tools above it): watch it there */
+        var hs = pack.classList.contains('is-onstage') ? pack.parentNode : null;
+        if (ro && hs !== hostSeen) { if (hostSeen) ro.unobserve(hostSeen); if (hs) ro.observe(hs); hostSeen = hs; }
+        lastD = 0; fit();
+      } }) : null;
     S.box.__onMove = function () { if (stg) stg.mount(); };
     S.box.__onReset = function () { sp.stop(); if (ro) ro.disconnect(); if (stg) stg.detach(); };
     S.box.__seek = function (t) { fit(); return sp.seek(t); };
