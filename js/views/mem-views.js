@@ -126,7 +126,7 @@
     var V = MV({
       scene: scene, liveNames: true,
       aria: 'Two boxes of equal volume with a divider between them, and under them a graph of the concentration of scent across the boxes. Scent particles are in the left box; when the divider is lifted they spread, the graph slopes down from left to right and then becomes flat, and the two concentrations become equal.',
-      barLabel: 'The divider', buttons: [['go', 'Lift the divider'], ['reset', 'Start again']],
+      barLabel: 'The divider', buttons: [['go', 'Lift the divider', 'memv__btn--act'], ['reset', 'Start again', 'memv__btn--act']],
       read: [['l', 'Left box:', 'scent', 'scent particles'], ['r', 'Right box:', 'scent', 'scent particles'], ['n', 'Net movement:']],
       key: { all: [['scent', 'scent particle'], ['air', 'air particle'], ['net', 'net movement'], ['ways', 'crossing each way']],
              sets: [['scent particle', 'air particle', 'net movement'], ['scent particle', 'air particle', 'crossing each way']],
@@ -331,7 +331,7 @@
     };
     var V = MV({
       scene: scene, aria: 'Two boxes side by side, each with a doorway in a wall, and under each a graph of its concentration of scent. They differ in one factor; the box with the faster diffusion has more particles across its wall.',
-      barLabel: 'Which factor', buttons: [['temp', 'Temperature'], ['grad', 'Gradient'], ['area', 'Surface area'], ['dist', 'Distance'], ['run', 'Run again']],
+      barLabel: 'Which factor', buttons: [['temp', 'Temperature'], ['grad', 'Gradient'], ['area', 'Surface area'], ['dist', 'Distance'], ['run', 'Run again', 'memv__btn--act']],
       read: [['a', 'Net movement:'], ['b', 'Net movement:'], ['c', 'Time:']],
       key: { all: [['scent', 'scent particle']], sets: [['scent particle']], now: function () { return ['scent particle']; } },
       onButton: function (id) { if (id === 'run') { go++; build(); ran(); V.names(); V.paint(); } else ctx.pick(id, { stay: true }); }

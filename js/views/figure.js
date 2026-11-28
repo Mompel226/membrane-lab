@@ -42,8 +42,11 @@
     var NAMES = spec.names || {}, BEYOND = spec.beyond || {};
     function labelOf(m, p) { return (m.names && m.names[p]) || NAMES[p] || p; }
     var root = h('div', 'cellv');
-    var bar = h('div', 'vbar cellv__bar');
-    bar.setAttribute('role', 'group'); bar.setAttribute('aria-label', 'Ways of seeing this picture');
+    /* the picture's switch, as every picture's in this lab (Daniel, 28 Nov 2026): its name, then joined tabs on the picture's edge */
+    var bar = h('div', 'vbar cellv__bar psw'), barAt = 0;
+    var bname = h('span', 'psw__name', spec.barLabel || 'Ways of seeing this picture'); bname.id = 'psw' + Math.random().toString(36).slice(2, 8);
+    var tabs = h('div', 'psw__tabs'); tabs.setAttribute('role', 'group'); tabs.setAttribute('aria-labelledby', bname.id);
+    bar.appendChild(bname); bar.appendChild(tabs);
     if (spec.modes.length < 2) bar.hidden = true;
     var note = h('p', 'cellv__note');
     note.setAttribute('aria-live', 'polite'); note.hidden = true;
@@ -52,10 +55,10 @@
     var uid = 'cv' + Math.random().toString(36).slice(2, 7);
 
     var modes = spec.modes.map(function (m, k) {
-      var b = h('button', 'cellv__mode', m.name); b.type = 'button';
+      var b = h('button', 'cellv__mode psw__tab', m.name); b.type = 'button';
       b.setAttribute('aria-pressed', k === 0 ? 'true' : 'false');
-      b.addEventListener('click', function () { show(k, null); });
-      bar.appendChild(b);
+      b.addEventListener('click', function () { barAt = Date.now(); show(k, null); });
+      tabs.appendChild(b);
       var svg = el('svg', { class: 'cellv__svg', role: 'img', 'aria-label': m.alt || m.name });
       var defs = el('defs', {}, svg);
       var f = el('filter', { id: uid + 'f' + k, x: '-50%', y: '-50%', width: '200%', height: '200%' }, defs);
@@ -259,6 +262,8 @@
       } else M.veil.classList.remove('is-on');
     }
     function show(k, why) {
+      /* a card, not the switch, changed the picture: the chosen tab flashes once */
+      if (k !== cur && Date.now() - barAt > 600 && global.MemStage) global.MemStage.flashTab(modes[k].btn);
       cur = k;
       modes.forEach(function (M, j) { M.svg.style.display = j === k ? '' : 'none'; M.btn.setAttribute('aria-pressed', j === k ? 'true' : 'false'); });
       draw(modes[k]);

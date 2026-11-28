@@ -209,15 +209,31 @@
          the scene's labels marked head: true),
          key?: { all: [[kind, name], …], sets: [[name, …], …] (what each state shows), now() (the names shown now) } }
      returns { el, setButtons(id), repaint(), labels(), stage: ... } for a view to wrap in Views.add */
+  /* one short flash of a tab (none with Reduce motion: the CSS keeps no animation there) */
+  function flashTab(x) { x.classList.remove('psw__tab--flash'); void x.offsetWidth; x.classList.add('psw__tab--flash'); }
+
   function MemView(o) {
     var root = h('div', 'memv ' + (o.cls || ''));
+    /* the picture's switch (Daniel, 28 Nov 2026): its name in words, then one joined row of tabs standing on the picture's top
+       edge, the chosen one filled; a button that does something rather than choose (memv__btn--act: Run again) stands apart */
     var bar = h('div', 'vbar memv__bar');
-    bar.setAttribute('role', 'group'); bar.setAttribute('aria-label', o.barLabel || 'What to show');
-    var btn = {};
+    var btn = {}, chosen = null, barAt = 0;
+    var isAct = function (b) { return /memv__btn--act/.test(b[2] || ''); };
+    var picks = (o.buttons || []).filter(function (b) { return !isAct(b); });
+    var tabs = bar, acts = bar;
+    if (picks.length > 1) {
+      bar.classList.add('psw');
+      var nm = h('span', 'psw__name', o.barLabel || 'What to show'); nm.id = 'psw' + Math.random().toString(36).slice(2, 8);
+      tabs = h('div', 'psw__tabs'); tabs.setAttribute('role', 'group'); tabs.setAttribute('aria-labelledby', nm.id);
+      bar.appendChild(nm); bar.appendChild(tabs);
+      if (picks.length < (o.buttons || []).length) { acts = h('div', 'psw__acts'); bar.appendChild(acts); }
+    } else { bar.setAttribute('role', 'group'); bar.setAttribute('aria-label', o.barLabel || 'What to show'); }
     (o.buttons || []).forEach(function (b) {
-      var x = h('button', 'memv__btn' + (b[2] ? ' ' + b[2] : ''), b[1]); x.type = 'button'; x.setAttribute('data-b', b[0]);
-      x.addEventListener('click', function () { if (o.onButton) o.onButton(b[0]); });
-      btn[b[0]] = x; bar.appendChild(x);
+      var act = isAct(b), tab = picks.length > 1 && !act;
+      var x = h('button', 'memv__btn' + (tab ? ' psw__tab' : '') + (b[2] ? ' ' + b[2] : ''), b[1]); x.type = 'button'; x.setAttribute('data-b', b[0]);
+      x.__act = act;
+      x.addEventListener('click', function () { barAt = Date.now(); if (o.onButton) o.onButton(b[0]); });
+      btn[b[0]] = x; (tab ? tabs : acts).appendChild(x);
     });
     if (!(o.buttons || []).length) bar.hidden = true;
     var fig = h('figure', 'memv__fig');
@@ -321,7 +337,12 @@
     whenFonts(function () { if (root.isConnected) { wasIn = true; full(); return true; } return !wasIn; });
     return {
       el: root, pill: pill, names: names, paint: paint, full: full,
-      press: function (id) { Object.keys(btn).forEach(function (k) { btn[k].setAttribute('aria-pressed', k === id ? 'true' : 'false'); }); },
+      press: function (id) {
+        Object.keys(btn).forEach(function (k) { if (!btn[k].__act) btn[k].setAttribute('aria-pressed', k === id ? 'true' : 'false'); });
+        /* a card, not the switch, changed the picture: the chosen tab flashes once, so the eye finds what changed */
+        if (chosen !== null && id !== chosen && btn[id] && Date.now() - barAt > 600) flashTab(btn[id]);
+        chosen = id;
+      },
       button: function (id) { return btn[id]; },
       start: function () { running = true; tsLast = null; if (!raf) raf = requestAnimationFrame(loop); full(); },
       stop: function () { running = false; if (raf) cancelAnimationFrame(raf); raf = null; },
@@ -329,7 +350,7 @@
     };
   }
 
-  global.MemStage = { attach: attach };
+  global.MemStage = { attach: attach, flashTab: flashTab };
   global.MemFilm = MemFilm;
   global.MemView = MemView;
 })(window);

@@ -441,3 +441,28 @@ p,li,dd,figcaption{text-wrap:pretty}
 /* a film standing in the column: its key smaller too */
 .sim .anikey{font-size:12.5px;gap:3px 14px;margin-top:4px}
 .sim .anikey__sw{width:24px;height:12px}
+
+/* ---------- the picture's switch (Daniel, 28 Nov 2026, for every lab; the Membrane Lab first) ----------
+   One joined switch, its name in words before it; the chosen part filled (the accent, white words), the others white with a
+   border; the tabs stand on the picture's top edge (the accent line under them) like folder tabs; the same size as the buttons
+   were. When a card changes the picture, the chosen tab flashes once (none with Reduce motion). Buttons that do something
+   (Run again) stand apart at the end of the row; a bar of only such buttons (Lift the divider) keeps its pills. */
+.vbar.psw{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:flex-start;gap:4px 10px;padding:0 2px;
+  border-bottom:2px solid var(--accent);margin-bottom:2px}
+.psw__name{flex:none;align-self:center;font-size:12px;font-weight:700;color:var(--col-soft);white-space:nowrap;padding:0 2px}
+.psw__tabs{display:flex;flex:0 1 auto;min-width:0;align-items:stretch}
+.psw .psw__tab{position:relative;border-radius:0;border-bottom:0;margin:0 0 0 -1.5px;white-space:normal;line-height:1.25;text-align:center;
+  background:var(--col-card);color:var(--col-ink);border-color:var(--col-line);flex:0 1 auto;min-width:0}
+.psw .psw__tab:first-child{margin-left:0;border-top-left-radius:9px}
+.psw .psw__tab:last-child{border-top-right-radius:9px}
+.psw .psw__tab:hover{border-color:var(--accent);z-index:1}
+.psw .psw__tab[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--on-ink);z-index:2}
+.psw .psw__tab:focus-visible{outline:2px solid var(--accent);outline-offset:2px;z-index:3}
+.psw__acts{margin-left:auto;display:flex;gap:6px;align-self:center;padding-bottom:3px}
+@media (prefers-reduced-motion:no-preference){
+  .psw .psw__tab--flash{animation:pswFlash 1s ease-out}
+}
+/* a narrow column (a small laptop, a phone): a bar with a button that does something keeps that button beside the name, and
+   its tabs on the line below, standing on the picture's edge (not "Run again" under the tabs, pushing the line away) */
+@container (max-width:600px){ .psw:has(.psw__acts) .psw__acts{order:1} .psw:has(.psw__acts) .psw__tabs{order:2;flex-basis:100%} }
+@keyframes pswFlash{0%{box-shadow:0 0 0 0 var(--accent)}35%{box-shadow:0 0 0 6px var(--accent-tint)}100%{box-shadow:0 0 0 0 transparent}}
