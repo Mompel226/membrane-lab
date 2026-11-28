@@ -22,7 +22,8 @@ by **Dr Daniel Mompel Riera**
 ## What a student does
 
 Each station has its own moving picture on the left and short cards on the right that open one at a time. Press a button
-on the picture and it changes; open a card and the picture shows that part. Then the questions say right or wrong, never
+on the picture and it changes; open a card and the picture shows that part. Where a station has an animation, its steps explain
+the ideas one at a time, and the cards under it hold the syllabus's own sentences and what the animation does not show. Then the questions say right or wrong, never
 the answer.
 
 |  |  |

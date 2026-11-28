@@ -349,37 +349,110 @@
   /* ======================================================================= Water, the solvent
      Liquid water as it really is: molecules touching, in no regular pattern, and sliding past each other, with hydrogen bonds (dashed) that break
      and form again (memory particle-model-in-diagrams). Each dissolved particle is held by water molecules that move with
-     it. Molecules are at their true sizes beside each other; the picture is about 6 nm wide. */
+     it. Molecules are at their true sizes beside each other; the picture is about 8 nm wide.
+     Each place shows what water does there (Daniel, 28 Nov 2026, of a digestion picture that only added a glucose molecule:
+     "I don't understand what that adds to the understanding of what you're explaining"): in digestion an enzyme dissolved in
+     water cuts starch, which does not dissolve, into maltose, which does; in excretion and in transport the liquid flows and
+     carries what is dissolved in it. */
   Views.add('solvent', function (spec, ctx) {
-    var W = 560, H = 330, u = 72, D0 = 26, M = 34, t = 0, mode = 'solution', rnd = Sim.rng(12), pts = [];
+    var W = 560, H = 330, u = 72, D0 = 26, M = 34, t = 0, t0 = 0, mode = 'solution', rnd = Sim.rng(12), pts = [];
     var SOL = {
       solution: [{ k: 'glucose', x: 170, y: 120, r: 34 }, { k: 'glucose', x: 395, y: 215, r: 34 }],
-      digestion: [{ k: 'glucose', x: 150, y: 105, r: 34 }, { k: 'glucose', x: 400, y: 120, r: 34 }, { k: 'glucose', x: 270, y: 245, r: 34 }],
       excretion: [{ k: 'urea', x: 150, y: 110, r: 24 }, { k: 'urea', x: 330, y: 80, r: 24 }, { k: 'urea', x: 235, y: 245, r: 24 }, { k: 'urea', x: 440, y: 225, r: 24 }],
       transport: [{ k: 'glucose', x: 140, y: 110, r: 34 }, { k: 'urea', x: 415, y: 95, r: 24 }, { k: 'mg', x: 280, y: 210, r: 16 }, { k: 'mg', x: 470, y: 250, r: 16 }]
     };
+    /* where the liquid flows, and how fast (px a second): urine and blood plasma carry what is dissolved in them */
+    var FLOW = { excretion: 14, transport: 20 };
+    var BW = W + 2 * M, BH = H + 2 * M;
+    function wrapX(x) { return ((x + M) % BW + BW) % BW - M; }
     function at(q, tt) {
-      /* each solute drifts slowly, with its shell of water */
+      /* each solute drifts slowly, with its shell of water, and goes with the liquid where it flows */
       var i = q.x * .013 + q.y * .021;
-      return [q.x + 26 * Math.sin(tt * .32 + i), q.y + 18 * Math.cos(tt * .27 + i * 1.7)];
+      return [wrapX(q.x + 26 * Math.sin(tt * .32 + i) + (FLOW[mode] || 0) * tt), q.y + 18 * Math.cos(tt * .27 + i * 1.7)];
     }
+
+    /* ---- digestion. Amylase is a protein about as wide as this picture: only its left part is drawn, with its active site,
+       a cleft that holds the end of a starch chain. Starch is a chain of glucose units far longer than the picture, so it
+       comes in from the left edge. Every CUT seconds the chain moves two units into the cleft, the enzyme cuts the bond
+       behind them, and the two units leave as one molecule of maltose through the open lower side of the cleft. Water
+       molecules gather round each maltose molecule: it dissolves. They never gather round the starch: it does not dissolve. */
+    var CUT = 4.4, SP = 58, GX = 500, GY = 150, ENZ = { x: 650, y: 150, r: 236 }, KEEP = 4;
+    var NOTCH = [[392, 116], [546, 116], [546, 200], [516, 262], [392, 262]];
+    function inPoly(P, x, y) {
+      var c = false;
+      for (var i = 0, j = P.length - 1; i < P.length; j = i++) {
+        if ((P[i][1] > y) !== (P[j][1] > y) && x < (P[j][0] - P[i][0]) * (y - P[i][1]) / (P[j][1] - P[i][1]) + P[i][0]) c = !c;
+      }
+      return c;
+    }
+    function enzR(a) { return ENZ.r + 8 * Math.sin(5 * a + .3) + 5 * Math.sin(11 * a + 1.2); }
+    /* the nearest point on the cleft's edges, for water pushed into the enzyme from the cleft: [x, y, distance] */
+    function toNotch(x, y) {
+      var best = null, bd = 1e18;
+      for (var i = 0; i < NOTCH.length; i++) {
+        var a = NOTCH[i], b = NOTCH[(i + 1) % NOTCH.length], ex = b[0] - a[0], ey = b[1] - a[1];
+        var s = clamp(((x - a[0]) * ex + (y - a[1]) * ey) / (ex * ex + ey * ey)), px = a[0] + s * ex, py = a[1] + s * ey, d = (x - px) * (x - px) + (y - py) * (y - py);
+        if (d < bd) { bd = d; best = [px, py, Math.sqrt(d)]; }
+      }
+      return best;
+    }
+    function digest(tt) {
+      var k = Math.floor(tt / CUT), ph = tt / CUT - k, adv = ease(clamp(ph / .32)), cutDone = ph >= .5;
+      var rings = [], pairs = [], j, x;
+      /* the chain: unit 0 lies at the back of the cleft once the chain has moved in */
+      var x0 = GX - 2 * SP * (1 - adv);
+      for (j = cutDone ? 2 : 0; j < 16; j++) {
+        x = x0 - j * SP;
+        if (x < -M - 30) break;
+        rings.push({ k: 'glucose', x: x, y: GY + clamp((392 - x) / 200) * 14 * Math.sin(x * .021 + tt * .45), r: 30, shell: false, starch: true, j: j });
+      }
+      /* the maltose molecules: the newest leaves the cleft through its open lower side, the older ones drift away, dissolved */
+      for (var m = 0; m < KEEP; m++) {
+        var age = tt - ((k - m) * CUT + .5 * CUT);
+        if (k - m < 0 || age < 0) continue;
+        var e = ease(clamp(age / 1.8)), cx = GX - SP / 2, cy = GY;
+        if (e < .5) cy = GY + 64 * ease(e / .5);
+        else { var f = ease((e - .5) / .5); cx = lerp(GX - SP / 2, 404, f); cy = lerp(GY + 64, GY + 112, f); }
+        /* out of the cleft, each one drifts away on its own path, so the newer ones never land on the older ones */
+        var drift = Math.max(0, age - 1.8), K = k - m, phi = -.15 + .6 * (Math.sin(K * 2.3) + 1) / 2;
+        cx -= 26 * Math.cos(phi) * drift; cy += 26 * Math.sin(phi) * drift + 6 * Math.sin(drift * .6 + K);
+        if (cx < -M - 60 || cy > H + M + 40) continue;
+        /* it dissolves once it is out of the enzyme: water molecules gather round it there (a shell that formed in the cleft
+           would carry the cleft's water out with it) */
+        var ang = lerp(0, .5, e) + .12 * Math.sin(drift * .5 + K), dx = Math.cos(ang) * SP / 2, dy = Math.sin(ang) * SP / 2, free = age > 1.65;
+        var a1 = { k: 'glucose', x: cx - dx, y: cy - dy, r: 30, shell: free, ang: ang }, a2 = { k: 'glucose', x: cx + dx, y: cy + dy, r: 30, shell: free, ang: ang };
+        rings.push(a1, a2);
+        pairs.push({ a: a1, b: a2, x: cx, y: cy, age: age, free: free });
+      }
+      return { rings: rings, pairs: pairs, flash: ph >= .32 && ph < .5 ? Math.sin((ph - .32) / .18 * Math.PI) : 0, cutX: x0 - 1.5 * SP };
+    }
+    function solutes() {
+      if (mode === 'digestion') return digest(t - t0).rings;
+      return SOL[mode].map(function (q) { var p = at(q, t); return { k: q.k, x: p[0], y: p[1], r: q.r, shell: true }; });
+    }
+    /* the enzyme takes a quarter of the picture, so a quarter of the water molecules are out of play while it is there */
+    function inEnzyme(x, y, pad) {
+      var dx = x - ENZ.x, dy = y - ENZ.y;
+      return dx * dx + dy * dy < Math.pow(enzR(Math.atan2(dy, dx)) + pad, 2) && !inPoly(NOTCH, x, y);
+    }
+
     /* liquid water has no pattern (a regular pattern is ice): the molecules touch, push each other and slide past each
        other, so each molecule's neighbours change */
-    var BW = W + 2 * M, BH = H + 2 * M, N = 322, COLS = Math.ceil(BW / D0) + 1, ROWS = Math.ceil(BH / D0) + 1;
+    var N = 322, NN = N, COLS = Math.ceil(BW / D0) + 1, ROWS = Math.ceil(BH / D0) + 1;
     var head = new Int32Array(COLS * ROWS), next = new Int32Array(N);
     for (var j = 0; j < N; j++) pts.push({ x: rnd() * BW - M, y: rnd() * BH - M, a: rnd() * TAU, s: (rnd() - .5) * 1.5 });
     function jostle(jit) {
-      var list = SOL[mode], P = list.map(function (q) { return at(q, t); }), i, p, q;
+      var list = solutes(), fl = (FLOW[mode] || 0) / 60, i, p, q;
       head.fill(-1);
-      for (i = 0; i < N; i++) {
+      for (i = 0; i < NN; i++) {
         p = pts[i];
-        if (jit) { p.x += (rnd() - .5) * jit; p.y += (rnd() - .5) * jit; p.a += p.s / 60; }
+        if (jit) { p.x += (rnd() - .5) * jit + fl; p.y += (rnd() - .5) * jit; p.a += p.s / 60; }
         if (p.x < -M) p.x += BW; else if (p.x >= W + M) p.x -= BW;
         if (p.y < -M) p.y += BH; else if (p.y >= H + M) p.y -= BH;
         var id = Math.min(COLS - 1, Math.max(0, Math.floor((p.x + M) / D0))) + Math.min(ROWS - 1, Math.max(0, Math.floor((p.y + M) / D0))) * COLS;
         next[i] = head[id]; head[id] = i;
       }
-      for (i = 0; i < N; i++) {
+      for (i = 0; i < NN; i++) {
         p = pts[i];
         var cx = Math.min(COLS - 1, Math.max(0, Math.floor((p.x + M) / D0))), cy = Math.min(ROWS - 1, Math.max(0, Math.floor((p.y + M) / D0)));
         for (var yy = Math.max(0, cy - 1); yy <= Math.min(ROWS - 1, cy + 1); yy++) {
@@ -395,34 +468,93 @@
           }
         }
       }
-      /* a dissolved particle pushes the water aside */
-      list.forEach(function (sol, n) {
+      /* a dissolved particle pushes the water aside, and holds a shell of water molecules; starch pushes it aside only */
+      list.forEach(function (sol) {
         var R = sol.r + 13;
-        pts.forEach(function (m) {
-          var ex = m.x - P[n][0], ey = m.y - P[n][1], e = Math.sqrt(ex * ex + ey * ey) || .01;
-          if (e < R) { m.x = P[n][0] + ex / e * R; m.y = P[n][1] + ey / e * R; }
+        for (var n = 0; n < NN; n++) {
+          var m = pts[n], ex = m.x - sol.x, ey = m.y - sol.y, e = Math.sqrt(ex * ex + ey * ey) || .01;
+          if (e < R) { m.x = sol.x + ex / e * R; m.y = sol.y + ey / e * R; }
           /* water is attracted to a dissolved particle, so a whole shell of molecules surrounds it */
-          else if (e < R + 15) { var pull = (e - R) * .22 / e; m.x -= ex * pull; m.y -= ey * pull; }
-        });
+          else if (sol.shell && e < R + 15) { var pull = (e - R) * .22 / e; m.x -= ex * pull; m.y -= ey * pull; }
+        }
       });
+      /* the enzyme is solid: water stays outside it, and outside its cleft's walls */
+      if (mode === 'digestion') for (i = 0; i < NN; i++) {
+        p = pts[i];
+        if (!inEnzyme(p.x, p.y, 12)) continue;
+        var ax = p.x - ENZ.x, ay = p.y - ENZ.y, aa = Math.atan2(ay, ax), rr = enzR(aa) + 12, nb = toNotch(p.x, p.y);
+        /* water pushed into the enzyme from its cleft goes back into the cleft, which is full of water too */
+        if (nb[2] + 12 < rr - Math.sqrt(ax * ax + ay * ay)) { var vl = nb[2] || .01; p.x = nb[0] + (nb[0] - p.x) / vl * 12; p.y = nb[1] + (nb[1] - p.y) / vl * 12; }
+        else { p.x = ENZ.x + Math.cos(aa) * rr; p.y = ENZ.y + Math.sin(aa) * rr; }
+      }
     }
     for (var w0 = 0; w0 < 200; w0++) jostle(1.4);                       /* it starts as a liquid */
+
+    function drawEnzyme(c) {
+      /* the protein, then the water in its cleft, then the cleft's walls (the active site) */
+      c.beginPath();
+      for (var i = 0; i <= 120; i++) { var a = i / 120 * TAU, rr = enzR(a); c[i ? 'lineTo' : 'moveTo'](ENZ.x + rr * Math.cos(a), ENZ.y + rr * Math.sin(a)); }
+      c.closePath();
+      var rg = c.createRadialGradient(ENZ.x - 110, ENZ.y - 90, 20, ENZ.x, ENZ.y, ENZ.r + 20);
+      rg.addColorStop(0, '#F4C9AB'); rg.addColorStop(1, '#C77650');
+      c.fillStyle = rg; c.fill();
+      c.strokeStyle = 'rgba(120,58,30,.8)'; c.lineWidth = 1.6; c.stroke();
+      c.save(); c.beginPath(); NOTCH.forEach(function (q, n) { c[n ? 'lineTo' : 'moveTo'](q[0], q[1]); }); c.closePath(); c.clip();
+      D.ground(c, 0, 0, W, H, C.water0, C.water1); c.restore();
+      var top = ENZ.x - Math.sqrt(Math.pow(enzR(Math.PI), 2) - Math.pow(NOTCH[0][1] - ENZ.y, 2));
+      var bot = ENZ.x - Math.sqrt(Math.pow(enzR(Math.PI), 2) - Math.pow(NOTCH[4][1] - ENZ.y, 2));
+      c.strokeStyle = 'rgba(150,70,36,.95)'; c.lineWidth = 3; c.lineJoin = 'round'; c.lineCap = 'round';
+      c.beginPath(); c.moveTo(top, NOTCH[0][1]); c.lineTo(NOTCH[1][0], NOTCH[1][1]); c.lineTo(NOTCH[2][0], NOTCH[2][1]); c.lineTo(NOTCH[3][0], NOTCH[3][1]); c.lineTo(bot, NOTCH[4][1]); c.stroke();
+    }
+    function bond(c, a, b) {
+      var dx = b.x - a.x, dy = b.y - a.y, d = Math.sqrt(dx * dx + dy * dy) || 1, ux = dx / d, uy = dy / d;
+      c.moveTo(a.x + ux * 24, a.y + uy * 24); c.lineTo(b.x - ux * 24, b.y - uy * 24);
+    }
+    function drawDigestion(c, dg) {
+      var chain = dg.rings.filter(function (q) { return q.starch; });
+      c.strokeStyle = C.sugar; c.lineWidth = 3.2; c.lineCap = 'round';
+      c.beginPath();
+      for (var i = 1; i < chain.length; i++) bond(c, chain[i], chain[i - 1]);
+      dg.pairs.forEach(function (q) { bond(c, q.a, q.b); });
+      c.stroke();
+      dg.pairs.forEach(function (q) {
+        if (!q.free) return;
+        /* a soft light on each maltose molecule that has dissolved, so a reader can find it */
+        c.save(); c.globalCompositeOperation = 'lighter';
+        var rg = c.createRadialGradient(q.x, q.y, 2, q.x, q.y, 62);
+        rg.addColorStop(0, 'rgba(255,240,190,.34)'); rg.addColorStop(1, 'rgba(255,240,190,0)');
+        c.fillStyle = rg; c.beginPath(); c.arc(q.x, q.y, 62, 0, TAU); c.fill(); c.restore();
+      });
+      dg.rings.forEach(function (q, n) { D.mol(c, 'glucose', q.x, q.y, (q.ang || 0) + (q.starch ? .2 * Math.sin(q.j * 1.3) : 0), u); });
+      if (dg.flash > 0) {
+        /* the enzyme cuts the bond */
+        c.save(); c.globalCompositeOperation = 'lighter';
+        var fg = c.createRadialGradient(dg.cutX, GY, 1, dg.cutX, GY, 26);
+        fg.addColorStop(0, 'rgba(255,255,235,' + (.95 * dg.flash).toFixed(3) + ')'); fg.addColorStop(1, 'rgba(255,240,190,0)');
+        c.fillStyle = fg; c.beginPath(); c.arc(dg.cutX, GY, 26, 0, TAU); c.fill(); c.restore();
+      }
+    }
+
     var scene = {
       W: W, H: H,
       tick: function (dt) { t += dt; var n = Math.max(1, Math.round(dt * 60)); while (n-- > 0) jostle(1.5); },
       draw: function (c) {
-        var list = SOL[mode], P = list.map(function (q) { return at(q, t); });
+        var list = solutes(), dg = mode === 'digestion' ? digest(t - t0) : null, shells = list.filter(function (q) { return q.shell; });
         D.frame(c, 0, 0, W, H, 16, function () {
           D.ground(c, 0, 0, W, H, C.water0, C.water1);
-          var drawn = pts.map(function (p) {
-            var a = p.a, hug = -1;
-            /* a molecule beside a solute is in its shell, and turns towards it */
-            for (var i = 0; i < list.length; i++) {
-              var dx = p.x - P[i][0], dy = p.y - P[i][1], R = list[i].r + 13;
-              if (dx * dx + dy * dy < (R + 7) * (R + 7)) { hug = i; a = Math.atan2(dy, dx) + Math.PI / 2 + (list[i].k === 'mg' ? Math.PI : 0); }
+          if (dg) drawEnzyme(c);
+          var drawn = [];
+          for (var n = 0; n < NN; n++) {
+            var p = pts[n], a = p.a, hug = -1;
+            /* a molecule beside a dissolved particle is in its shell, and turns towards it */
+            for (var i = 0; i < shells.length; i++) {
+              var dx = p.x - shells[i].x, dy = p.y - shells[i].y, R = shells[i].r + 13;
+              if (dx * dx + dy * dy < (R + 7) * (R + 7)) { hug = i; a = Math.atan2(dy, dx) + Math.PI / 2 + (shells[i].k === 'mg' ? Math.PI : 0); }
             }
-            return { x: p.x, y: p.y, a: a, hug: hug };
-          });
+            /* the enzyme is dissolved too: a shell of water molecules covers its surface */
+            if (dg && hug < 0 && inEnzyme(p.x, p.y, 19)) { hug = 0; a = Math.atan2(p.y - ENZ.y, p.x - ENZ.x) + Math.PI / 2; }
+            drawn.push({ x: p.x, y: p.y, a: a, hug: hug });
+          }
           drawn.forEach(function (m) { D.mol(c, 'water', m.x, m.y, m.a, u, m.hug < 0 ? .45 : 1); });
           /* the hydrogen bonds: dashed, in the gaps between the molecules, breaking and forming */
           c.strokeStyle = 'rgba(214,240,255,.95)'; c.lineWidth = 1.5; c.setLineDash([2.4, 2.6]);
@@ -437,56 +569,82 @@
             }
           }
           c.stroke(); c.setLineDash([]);
+          /* the liquid flows: every molecule in it moves on together, and the arrow says which way */
+          if (FLOW[mode]) D.arrow(c, 36, H - 28, W - 36, H - 28, 12, 'rgba(170,225,255,.62)', { head: 22, headW: 20 });
+          if (dg) { drawDigestion(c, dg); return; }
           list.forEach(function (q, i) {
             /* the solute itself, and a soft light so a reader can find it */
             c.save(); c.globalCompositeOperation = 'lighter';
-            var rg = c.createRadialGradient(P[i][0], P[i][1], 2, P[i][0], P[i][1], q.r + 8);
+            var rg = c.createRadialGradient(q.x, q.y, 2, q.x, q.y, q.r + 8);
             rg.addColorStop(0, 'rgba(255,240,190,.42)'); rg.addColorStop(1, 'rgba(255,240,190,0)');
-            c.fillStyle = rg; c.beginPath(); c.arc(P[i][0], P[i][1], q.r + 8, 0, TAU); c.fill(); c.restore();
-            D.mol(c, q.k, P[i][0], P[i][1], t * .25 + i, u);
+            c.fillStyle = rg; c.beginPath(); c.arc(q.x, q.y, q.r + 8, 0, TAU); c.fill(); c.restore();
+            D.mol(c, q.k, q.x, q.y, t * .25 + i, u);
           });
         });
       },
       /* the key names each particle; the names say what each one is here (the reviewer, 25 Nov 2026: solvent, solute and
          solution, and where the water is, were never named) */
       labels: function () {
-        var list = SOL[mode], P0 = at(list[0], t);
-        if (mode === 'solution') {
-          var best = null, bd = -1;
-          pts.forEach(function (p) {
-            if (p.x < 40 || p.x > W - 40 || p.y < H * .55 || p.y > H - 24) return;
-            var d = Math.min.apply(null, list.map(function (q) { var a = at(q, t); return Math.hypot(p.x - a[0], p.y - a[1]); }));
-            if (d > bd) { bd = d; best = p; }
-          });
-          var it = [{ id: 'sol', text: 'solute: glucose', x: P0[0], y: P0[1], side: 'T' }];
-          if (best) it.push({ id: 'solv', text: 'solvent: water', x: best.x, y: best.y, side: 'B' });
+        if (mode === 'digestion') {
+          var dg = digest(t - t0), it = [], best = null;
+          dg.rings.forEach(function (q) { if (q.starch && q.x > 40 && (!best || Math.abs(q.x - 150) < Math.abs(best.x - 150))) best = q; });
+          if (best) it.push({ id: 'starch', text: 'starch: does not dissolve', x: best.x, y: best.y, side: 'T' });
+          it.push({ id: 'enz', text: 'amylase: an enzyme, dissolved in water', x: 470, y: 40, side: 'T' });
+          var mal = dg.pairs.filter(function (q) { return q.free && q.x > 50 && q.y < H - 30; }).sort(function (a, b) { return a.age - b.age; })[0];
+          if (mal) it.push({ id: 'malt', text: 'maltose: dissolves', x: mal.x, y: mal.y, side: 'B' });
           return it;
         }
-        if (mode === 'digestion') return [{ id: 'what', text: 'glucose, made by digestion', x: P0[0], y: P0[1], side: 'T' }];
-        if (mode === 'excretion') return [{ id: 'what', text: 'urea, in urine', x: P0[0], y: P0[1], side: 'T' }];
-        return [];
+        var list = solutes();
+        if (mode === 'solution') {
+          var bst = null, bd = -1;
+          pts.forEach(function (p) {
+            if (p.x < 40 || p.x > W - 40 || p.y < H * .55 || p.y > H - 24) return;
+            var d = Math.min.apply(null, list.map(function (q) { return Math.hypot(p.x - q.x, p.y - q.y); }));
+            if (d > bd) { bd = d; bst = p; }
+          });
+          var out = [{ id: 'sol', text: 'solute: glucose', x: list[0].x, y: list[0].y, side: 'T' }];
+          if (bst) out.push({ id: 'solv', text: 'solvent: water', x: bst.x, y: bst.y, side: 'B' });
+          return out;
+        }
+        /* where the liquid flows: the solute nearest the middle is named, and the flow */
+        var mid = list.filter(function (q) { return q.x > 60 && q.x < W - 60; }).sort(function (a, b) { return Math.abs(a.x - W * .45) - Math.abs(b.x - W * .45); })[0];
+        if (mode === 'excretion') {
+          var ex = [{ id: 'flow', text: 'urine flows, carrying the urea', x: W * .5, y: H - 28, side: 'B' }];
+          if (mid) ex.unshift({ id: 'what', text: 'urea, dissolved in the water of urine', x: mid.x, y: mid.y, side: 'T' });
+          return ex;
+        }
+        return [{ id: 'flow', text: 'blood plasma flows, carrying what is dissolved in it', x: W * .5, y: H - 28, side: 'B' }];
       }
     };
-    var SOLUTE = { glucose: 'glucose molecule', urea: 'urea molecule', mg: 'magnesium ion' };
+    var NAME = { glucose: 'glucose molecule', urea: 'urea molecule', mg: 'magnesium ion' };
     var V = MV({
-      scene: scene, liveNames: true, aria: 'Water molecules touching each other, with dashed hydrogen bonds. Each dissolved particle is surrounded by a shell of water molecules.',
+      scene: scene, liveNames: true, aria: 'Water molecules touching each other, with dashed hydrogen bonds. Each dissolved particle is surrounded by a shell of water molecules. In digestion, amylase cuts starch into maltose, which dissolves; in urine and in blood plasma the liquid flows and carries what is dissolved in it.',
       barLabel: 'Where', buttons: [['digestion', 'Digestion'], ['excretion', 'Excretion'], ['transport', 'Transport']],
-      key: { all: [['water', 'water molecule'], ['glucose', 'glucose molecule'], ['urea', 'urea molecule'], ['mg', 'magnesium ion'], ['hbond', 'hydrogen bond']],
-             sets: [['water molecule', 'glucose molecule', 'hydrogen bond'], ['water molecule', 'urea molecule', 'hydrogen bond'], ['water molecule', 'glucose molecule', 'urea molecule', 'magnesium ion', 'hydrogen bond']],
+      key: { all: [['water', 'water molecule'], ['glucose', 'glucose molecule'], ['urea', 'urea molecule'], ['mg', 'magnesium ion'], ['starch', 'starch: a chain of glucose units'], ['maltose', 'maltose molecule: two glucose units'], ['amylase', 'amylase, an enzyme'], ['flow', 'the flow of the liquid'], ['hbond', 'hydrogen bond']],
+             sets: [['water molecule', 'glucose molecule', 'hydrogen bond'], ['water molecule', 'starch: a chain of glucose units', 'maltose molecule: two glucose units', 'amylase, an enzyme', 'hydrogen bond'], ['water molecule', 'urea molecule', 'the flow of the liquid', 'hydrogen bond'], ['water molecule', 'glucose molecule', 'urea molecule', 'magnesium ion', 'the flow of the liquid', 'hydrogen bond']],
              now: function () {
+               if (mode === 'digestion') return ['water molecule', 'starch: a chain of glucose units', 'maltose molecule: two glucose units', 'amylase, an enzyme', 'hydrogen bond'];
                var out = ['water molecule'];
-               SOL[mode].forEach(function (q) { if (out.indexOf(SOLUTE[q.k]) < 0) out.push(SOLUTE[q.k]); });
+               SOL[mode].forEach(function (q) { if (out.indexOf(NAME[q.k]) < 0) out.push(NAME[q.k]); });
+               if (FLOW[mode]) out.push('the flow of the liquid');
                return out.concat('hydrogen bond');
              } },
       onButton: function (id) { ctx.pick(id, { stay: true }); }
     });
-    var SAY = { solution: 'A solution: glucose (the solute) dissolved in water (the solvent)', digestion: 'In the gut: small molecules made by digestion, dissolved in water',
-                excretion: 'In urine: urea dissolved in water', transport: 'In blood plasma: glucose, urea and ions dissolved in water' };
-    function show(m) { if (m !== mode) { mode = m; for (var n = 0; n < 30; n++) jostle(0); } api.say = SAY[m]; if (ctx.caption) ctx.caption(); V.press(m); V.names(); V.paint(); }
+    var SAY = { solution: 'A solution: glucose (the solute) dissolved in water (the solvent)', digestion: 'In the gut: amylase, an enzyme dissolved in water, breaks starch into maltose, which dissolves',
+                excretion: 'In urine: urea dissolved in water, carried out of the body', transport: 'In blood plasma: glucose, urea and ions dissolved in water, carried round the body' };
+    var CREDIT = { digestion: 'Water molecules, glucose units and amylase at their true sizes beside each other. Only part of the amylase molecule is drawn: the whole molecule is about as wide as this picture. A starch chain is far longer than the picture, and its glucose units are drawn a little further apart than they are.',
+                   other: 'Water molecules and solutes at their true sizes. Hydrogen bonds break and form all the time.' };
+    function show(m) {
+      if (m !== mode) { mode = m; t0 = t; NN = m === 'digestion' ? N - 70 : N; for (var n = 0; n < 40; n++) jostle(0); }
+      /* with Reduce motion, the one still is a moment after three cuts, with maltose that has dissolved */
+      if (m === 'digestion' && V.isStill && V.isStill()) { t0 = t - 3.1 * CUT; for (var s = 0; s < 40; s++) jostle(0); }
+      api.say = SAY[m]; api.credit = m === 'digestion' ? CREDIT.digestion : CREDIT.other;
+      if (ctx.caption) ctx.caption(); V.press(m); V.names(); V.paint();
+    }
     var api = {
       el: V.el, start: function () { V.start(); show(mode); }, stop: V.stop,
-      say: SAY.solution,
-      credit: 'Water molecules and solutes at their true sizes. Hydrogen bonds break and form all the time.',
+      say: SAY.solution, credit: CREDIT.other,
       focus: function (part) { show(part && part !== 'solution' ? part : 'solution'); }
     };
     return api;
@@ -560,9 +718,20 @@
   Views.add('tubing', function (spec, ctx) {
     /* the close-up shows what the bag does (Daniel, 25 Nov 2026: "make sure that the animation is in line with the close-up"):
        while the bag changes, more water molecules cross one way, counted, with the arrow of the net movement; once it has
-       stopped changing, as many cross each way. RATE: the seconds for a full change of the bag */
-    var W = 560, H = 356, setup = 'in', full = .45, target = 1, u = 16, RATE = 9, cnt = { ab: 0, ba: 0 }, eqBase = null, el = 0;
-    function settled() { return Math.abs(full - target) <= .004; }
+       stopped changing, as many cross each way. RATE: the seconds for a full change of the bag.
+       Each model is true to its end (Daniel, 28 Nov 2026: "the dialysis tubing gets empty ... but I still see a lot of water
+       molecules on the left and not to the right ... make sure that the models are correct"):
+       - sucrose solution in the bag: as water enters, the solution in the bag becomes more dilute (in the close-up, fewer
+         sucrose molecules and more water molecules), but it never becomes pure water; the net movement stops only when the
+         bag is firm and the stretched tubing presses on the solution (the pressure is drawn), and then as many water
+         molecules leave the bag as enter it;
+       - water in the bag: the water in the bag stays pure water, so it keeps the higher water potential: water goes on
+         leaving until the bag is soft and almost empty, and the net movement never stops while any water is left in it
+         (it used to stop, with as many crossing each way, while the close-up still showed far more water in the bag);
+       - the same solution in both: as many cross each way from the start;
+       - a model of a cell: the same solution in both, each part named as the part of a cell it represents. */
+    var W = 560, H = 356, setup = 'in', full = .45, target = 1, u = 16, RATE = 9, cnt = { ab: 0, ba: 0 }, eqBase = null, el = 0, PRESS = '#E0345F';
+    function settled() { return SET[setup].stops !== false && Math.abs(full - target) <= .004; }
     var B = { x: 26, y: 58, w: 292, h: 262 };
     var LX = 438, LY = 118, LR = 104;
     /* the tubing in the close-up: solid bars with pores between them, wider than a water molecule and narrower than sucrose */
@@ -570,9 +739,11 @@
     for (var py = 2; py < 2 * LR; py += PER) PORES.push(py + BAR + (PER - BAR) / 2);
     var PORE = Sim.channels(PORES, 4, 0, 11);
     var SET = {
-      in: { seed: 5, label: 'bag of sucrose solution, in water', nL: 34, nR: 12, sL: 0, sR: 6, liquid: ['rgba(120,200,240,.38)', 'rgba(60,150,210,.56)'], bag: null, to: 1, net: 1 },
-      out: { seed: 6, label: 'bag of water, in sucrose solution', nL: 12, nR: 34, sL: 6, sR: 0, liquid: ['rgba(240,200,120,.42)', 'rgba(205,148,66,.62)'], bag: ['rgba(190,226,246,.72)', 'rgba(150,204,236,.72)', 'rgba(104,166,208,.82)'], to: 0, net: -1 },
-      same: { seed: 23, label: 'the same solution in both', nL: 22, nR: 22, sL: 4, sR: 4, liquid: ['rgba(240,200,120,.42)', 'rgba(205,148,66,.62)'], bag: null, to: .62, net: 0 }
+      /* spare: water molecules the bag's side gains as its solution becomes more dilute (parked until then) */
+      in: { seed: 5, label: 'bag of sucrose solution, in water', nL: 34, nR: 16, spare: 4, sL: 0, sR: 6, liquid: ['rgba(120,200,240,.38)', 'rgba(60,150,210,.56)'], bag: null, to: 1, net: 1 },
+      out: { seed: 6, label: 'bag of water, in sucrose solution', nL: 12, nR: 34, sL: 6, sR: 0, liquid: ['rgba(240,200,120,.42)', 'rgba(205,148,66,.62)'], bag: ['rgba(190,226,246,.72)', 'rgba(150,204,236,.72)', 'rgba(104,166,208,.82)'], to: 0, net: -1, stops: false },
+      same: { seed: 23, label: 'the same solution in both', nL: 22, nR: 22, sL: 4, sR: 4, liquid: ['rgba(240,200,120,.42)', 'rgba(205,148,66,.62)'], bag: null, to: .62, net: 0 },
+      bag: { seed: 29, label: 'a model of a cell', nL: 22, nR: 22, sL: 4, sR: 4, liquid: ['rgba(240,200,120,.42)', 'rgba(205,148,66,.62)'], bag: null, to: .62, net: 0, model: true }
     };
     function make(k) {
       var f = SET[k];
@@ -585,14 +756,43 @@
           if (eqBase != null) return Math.abs(x.ab - x.ba - eqBase + dir) > 1 ? -1 : p;
           if (!f2.net) return p;
           /* while it changes: water moves out of a sucrose solution less easily (its lower water potential, as the card on
-             water potential says), so more water crosses one way, and the counts grow with the bag's change, never against it */
-          if ((dir > 0 ? f2.sL : f2.sR) > 0) p *= .45;
+             water potential says), and the less easily the more sucrose there is, so more water crosses one way, and the counts
+             grow with the bag's change, never against it */
+          var sOn = q.count('sucrose')[dir > 0 ? 0 : 1];
+          if (sOn > 0) p *= 1 - .55 * Math.min(1, sOn / 6);
           if (dir !== f2.net && f2.net * ((x.ab - cnt.ab) - (x.ba - cnt.ba)) - 1 < Math.floor(el * .4)) return -1;
           return p;
         } },
-        kinds: { water: { n: [f.nL, f.nR], speed: 58, tau: .8, through: 46, keep: [f.nL, f.nR], r: 3.4 }, sucrose: { n: [f.sL, f.sR], speed: 16, tau: .5, r: 9 } } });
+        kinds: { water: { n: [f.nL, f.nR], speed: 58, tau: .8, through: 46, keep: [f.nL, f.nR - (f.spare || 0)], r: 3.4 }, sucrose: { n: [f.sL, f.sR], speed: 16, tau: .5, r: 9 } } });
     }
-    var sims = { in: make('in'), out: make('out'), same: make('same') };
+    var sims = {};
+    function build(k) {
+      var f = SET[k], s = make(k);
+      /* the water the bag's side will gain waits out of the picture until the solution in the bag becomes more dilute */
+      if (f.spare) { var wi = s.kindIx('water'), left = f.spare; for (var q = s.N - 1; q >= 0 && left > 0; q--) if (s.K[q] === wi && s.X[q] >= LR && s.park(q)) left--; }
+      return s;
+    }
+    ['in', 'out', 'same', 'bag'].forEach(function (k) { sims[k] = build(k); });
+    /* the bag swells, so the same sucrose is in more water: in the close-up a sucrose molecule leaves at the far edge of the
+       bag's side (into the rest of the bag), and two water molecules come in there for each. force: at once (a still) */
+    function dilute(force) {
+      var f = SET[setup]; if (!f.spare) return false;
+      var sm = sims[setup], si = sm.kindIx('sucrose'), wi = sm.kindIx('water'), changed = false;
+      var sT = full < .62 ? f.sR : full < .84 ? f.sR - 1 : f.sR - 2, wT = f.nR - f.spare + 2 * (f.sR - sT);
+      if (sm.count('sucrose')[1] > sT) {
+        /* one that is out of sight (the close-up is round, its box square) goes first, else one at the far edge */
+        var best = -1, bx = -1;
+        for (var q = 0; q < sm.N; q++) {
+          if (sm.K[q] !== si || sm.PK[q] || sm.TR[q] || sm.X[q] < LR) continue;
+          var hidden = Math.pow(sm.X[q] - LR, 2) + Math.pow(sm.Y[q] - LR, 2) > Math.pow(LR - 4, 2), sc = sm.X[q] + (hidden ? 1e4 : 0);
+          if (sc > bx) { bx = sc; best = q; }
+        }
+        if (best >= 0 && (force || bx > 1e4 || bx > 2 * LR - 30)) changed = sm.park(best) || changed;
+      }
+      sm.kinds[wi].keep[1] = wT;
+      if (sm.count('water')[1] < wT) for (var q2 = 0; q2 < sm.N; q2++) if (sm.K[q2] === wi && sm.PK[q2]) { changed = sm.unpark(q2, 1) || changed; break; }
+      return changed;
+    }
     /* the upper edge of the bag, and the middle of its contents, at a distance dx along it */
     function nearI(Pp, dx) { var n = Pp.top.length - 1; return Math.max(0, Math.min(n, Math.round((dx + 107) / 214 * n))); }
     function edgeAt(Pp, dx) { return Pp.top[nearI(Pp, dx)]; }
@@ -604,6 +804,7 @@
         el += dt;
         if (settled() && eqBase == null) { var x = sims[setup].crossed('water'); eqBase = x.ab - x.ba; }
         stepN(sims[setup], dt);
+        dilute(false);
       },
       draw: function (c) {
         var f = SET[setup];
@@ -618,14 +819,22 @@
           var fills = f.bag ? { fill0: f.bag[0], fill1: f.bag[1], fill2: f.bag[2] } : {};
           var P = D.bag(c, Object.assign({ x: bx, y: by, L: 214, r: 42, full: full }, fills));
           D.beakerGlass(c, o);
-          /* the net movement of water through the wall of the bag */
-          var moving = Math.abs(full - target) > .004;
+          /* the net movement of water through the wall of the bag (a bag of water never stops losing water) */
+          var moving = !settled();
           if (f.net && moving) {
             var dir = f.net;
             [-30, 14, 58].forEach(function (dx) {
               /* each arrow crosses the wall of the bag where the wall is now */
               var top = by + edgeAt(P, dx)[1], y0 = dir > 0 ? top - 34 : top + 5, y1 = dir > 0 ? top + 4 : top - 31;
               D.arrow(c, bx + dx, y0, bx + dx, y1, 7, NET, { head: 12, headW: 10 });
+            });
+          }
+          /* a full, firm bag: the stretched tubing presses on the solution inside, so as many water molecules leave as enter */
+          if (setup === 'in' && settled()) {
+            [-58, 4, 64].forEach(function (dx) {
+              var i = nearI(P, dx), top = by + P.top[i][1], bot = by + P.bot[i][1];
+              D.arrow(c, bx + dx, top + 3, bx + dx, top + 22, 6, PRESS, { head: 10, headW: 9 });
+              D.arrow(c, bx + dx, bot - 3, bx + dx, bot - 22, 6, PRESS, { head: 10, headW: 9 });
             });
           }
           /* the close-up of the tubing's wall */
@@ -644,7 +853,7 @@
           var sm = sims[setup];
           ['sucrose', 'water'].forEach(function (nm) {
             var kk = sm.kindIx(nm);
-            for (var q = 0; q < sm.N; q++) if (sm.K[q] === kk) D.mol(c, nm, LX + LR - sm.X[q], LY - LR + sm.Y[q], sm.A[q], u);
+            for (var q = 0; q < sm.N; q++) if (sm.K[q] === kk && !sm.PK[q]) D.mol(c, nm, LX + LR - sm.X[q], LY - LR + sm.Y[q], sm.A[q], u);
           });
           /* each water molecule passing through a pore is ringed, so the crossings can be seen and compared */
           c.strokeStyle = 'rgba(255,240,190,.95)'; c.lineWidth = 1.4;
@@ -667,6 +876,16 @@
         var bx = B.x + B.w / 2, by = B.y + B.h * .62;
         var inside = setup === 'in' ? 'sucrose solution' : setup === 'out' ? 'water' : 'sucrose solution', around = setup === 'in' ? 'water' : 'sucrose solution';
         var Pn = D.bagPath({ L: 214, r: 42, full: full }), e = edgeAt(Pn, -64), m = midAt(Pn, 16);
+        /* a model of a cell: each part named as the part of a cell it represents */
+        if (SET[setup].model) {
+          var pore = PORES.reduce(function (a, b) { return Math.abs(b - LR * 1.5) < Math.abs(a - LR * 1.5) ? b : a; });
+          return [{ id: 'tub', text: 'dialysis tubing: represents the cell membrane', x: bx - 64, y: by + e[1], side: 'T' },
+                  { id: 'gap', text: 'close-up of the tubing', x: LX, y: LY - LR + 4, side: 'T' },
+                  { id: 'knot', text: 'tied at both ends', x: bx - 110, y: by + Pn.sag(0), side: 'B' },
+                  { id: 'pore', text: 'pore: only water molecules pass', x: LX, y: LY - LR + pore, side: 'B' },
+                  { id: 'lb', text: 'bag', x: LX - 52, y: LY + LR * .78, side: 'B' },
+                  { id: 'lo', text: 'beaker', x: LX + 52, y: LY + LR * .78, side: 'B' }];
+        }
         return [{ id: 'tub', text: 'dialysis tubing', x: bx - 64, y: by + e[1], side: 'T' },
                 { id: 'gap', text: 'close-up of the tubing', x: LX, y: LY - LR + 4, side: 'T' },
                 { id: 'in', text: inside, x: bx + 16, y: by + m, side: 'B' },
@@ -678,22 +897,27 @@
         /* the sim's left side is the beaker (the close-up shows it on the right): a crossing to its right is into the bag */
         var x = sims[setup].crossed('water');
         pill('i', String(x.ab - cnt.ab), 'ok'); pill('o', String(x.ba - cnt.ba), 'ok');
-        pill('b', full > .8 ? 'firm and swollen' : full < .2 ? 'soft' : setup === 'same' ? 'not changing' : 'changing', full > .8 ? 'ok' : full < .2 ? 'bad' : 'warn');
+        pill('b', full > .8 ? 'firm and swollen' : full < .2 ? (setup === 'out' ? 'soft, still losing water' : 'soft') : !SET[setup].net ? 'not changing' : 'changing', full > .8 ? 'ok' : full < .2 ? 'bad' : 'warn');
       }
     };
     var V = MV({
       scene: scene, liveNames: true, aria: 'A tied bag of dialysis tubing in a beaker. In water a bag of sucrose solution swells and becomes firm; a bag of water in sucrose solution becomes soft.',
       barLabel: 'What is in the bag and the beaker', buttons: [['in', 'Sucrose solution in the bag'], ['out', 'Water in the bag'], ['same', 'The same solution in both']],
       read: [['i', 'Water into the bag:'], ['o', 'Water out of the bag:'], ['b', 'The bag:']],
-      key: { all: [['water', 'water molecule'], ['sucrose', 'sucrose molecule'], ['crossing', 'water molecule crossing the tubing'], ['net', 'net movement of water'], ['ways', 'crossing each way']],
-             sets: [['water molecule', 'sucrose molecule', 'water molecule crossing the tubing', 'net movement of water'], ['water molecule', 'sucrose molecule', 'water molecule crossing the tubing', 'crossing each way']],
-             now: function () { var a = ['water molecule', 'sucrose molecule', 'water molecule crossing the tubing']; return a.concat(SET[setup].net && !settled() ? 'net movement of water' : 'crossing each way'); } },
+      /* in this order the key keeps to two rows in the smallest laptop window, the tubing's pressure included */
+      key: { all: [['water', 'water molecule'], ['sucrose', 'sucrose molecule'], ['ways', 'crossing each way'], ['net', 'net movement of water'], ['crossing', 'water molecule crossing the tubing'], ['press', 'pressure of the stretched tubing']],
+             sets: [['water molecule', 'sucrose molecule', 'water molecule crossing the tubing', 'net movement of water'], ['water molecule', 'sucrose molecule', 'water molecule crossing the tubing', 'crossing each way', 'pressure of the stretched tubing']],
+             now: function () {
+               var a = ['water molecule', 'sucrose molecule', 'water molecule crossing the tubing'].concat(SET[setup].net && !settled() ? 'net movement of water' : 'crossing each way');
+               return setup === 'in' && settled() ? a.concat('pressure of the stretched tubing') : a;
+             } },
       onButton: function (id) { ctx.pick(id, { stay: true }); }
     });
     function show(k, restart) {
       setup = k; V.press(k); target = SET[k].to;
-      if (restart !== false) full = k === 'in' ? .4 : k === 'out' ? .92 : .62;
-      if (V.isStill()) full = target;
+      if (restart !== false) { full = k === 'in' ? .4 : k === 'out' ? .92 : .62; if (SET[k].spare) sims[k] = build(k); }
+      /* with Reduce motion, the end of each model: the bag of sucrose solution firm, with its solution as dilute as it gets */
+      if (V.isStill()) { full = target; if (SET[k].spare) for (var g = 0; g < 12 && dilute(true); g++); }
       /* the counts start again at each press; the bag that is not changing has its crossings balanced from now */
       /* a molecule already in a pore finishes its crossing: it counts for the time before this press */
       var sm = sims[k], x = sm.crossed('water'), wi = sm.kindIx('water'), tAB = 0, tBA = 0;
@@ -705,7 +929,7 @@
       el: V.el, start: function () { V.start(); show(setup, false); }, stop: V.stop,
       say: 'A bag of dialysis tubing, tied at both ends, represents a cell',
       credit: 'Drawn for this lab. In the close-up, water and sucrose molecules are at their true sizes beside each other, the pores are drawn smaller than they really are, and only some of the water molecules are drawn.',
-      focus: function (part) { if (part === 'in' || part === 'out' || part === 'same') show(part); }
+      focus: function (part) { if (SET[part]) show(part); }
     };
   });
 

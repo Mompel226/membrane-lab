@@ -205,6 +205,12 @@
     channel: '<path fill="#4FA8DE" d="M3 2.6Q3 1.5 4.2 1.5H23.8Q25 1.5 25 2.6V5.2C21 5.2 18 6.2 14 6.2S7 5.2 3 5.2Z"/><path fill="#2E86BE" d="M3 11.4Q3 12.5 4.2 12.5H23.8Q25 12.5 25 11.4V8.8C21 8.8 18 7.8 14 7.8S7 8.8 3 8.8Z"/>',
     energy: '<circle fill="#FFE680" cx="14" cy="7" r="5"/><circle fill="#FFF7CF" cx="14" cy="7" r="2.3"/>',
     hbond: '<path fill="none" stroke="#D6F0FF" stroke-width="1.7" stroke-dasharray="2.6 2.6" d="M3 7H25"/>',
+    /* digestion (Water, the solvent, 28 Nov 2026): starch, a chain of glucose units; maltose, two of them; amylase, an enzyme
+       with its cleft; and the flow of a liquid that carries what is dissolved in it */
+    starch: '<path fill="rgba(255,201,92,.25)" stroke="#FFC95C" stroke-width="1.3" stroke-linejoin="round" d="M1.4 7l1.9-3.3h3.8l1.9 3.3-1.9 3.3H3.3zM10.1 7l1.9-3.3h3.8l1.9 3.3-1.9 3.3H12zM18.8 7l1.9-3.3h3.8l1.9 3.3-1.9 3.3h-3.8z"/>',
+    maltose: '<path fill="rgba(255,201,92,.25)" stroke="#FFC95C" stroke-width="1.3" stroke-linejoin="round" d="M5.6 7l1.9-3.3h3.8l1.9 3.3-1.9 3.3H7.5zM14.3 7l1.9-3.3h3.8l1.9 3.3-1.9 3.3h-3.8z"/>',
+    amylase: '<path fill="#E2A07C" stroke="#96462A" stroke-width="1" d="M27 1H12C7.6 1 4.4 2.6 3.6 4.8H13v4.4H3.6C4.4 11.4 7.6 13 12 13h15z"/>',
+    flow: '<path fill="rgba(170,225,255,.9)" d="M2 5h15V1.6L26 7l-9 5.4V9H2z"/>',
     /* the arrows: the net movement (one wide arrow), and the crossings each way (two thin ones) */
     press: '<path fill="#B7193F" stroke="#FFFFFF" stroke-width=".7" d="M2 5.7h14V2.3L26 7l-10 4.7V8.3H2z"/>',
     net: '<path fill="#FFF3C4" stroke="#0E1D2E" stroke-width=".8" d="M2 5h15V1.6L26 7l-9 5.4V9H2z"/>',

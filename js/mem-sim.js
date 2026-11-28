@@ -59,6 +59,7 @@
     this.A = new Float32Array(n); this.SP = new Float32Array(n);   /* each particle's turn on itself, and how fast */
     this.K = new Uint8Array(n); this.TR = new Int8Array(n);         /* TR: crossing the wall (+1 to the right, -1 to the left) */
     this.LN = new Float32Array(n);                                  /* the channel a crossing particle is in, or -1 */
+    this.PK = new Uint8Array(n);                                    /* parked: out of the picture (Sim.prototype.park) */
     this.hit = !!o.hit;
     if (this.hit) {
       /* a grid of cells, so each particle is compared only with those near it */
@@ -83,6 +84,7 @@
     this.ba = this.kinds.map(function () { return 0; });            /* crossed right → left */
     this.side = this.kinds.map(function (k) { return [k.n[0], g ? k.n[1] : 0]; });
     this.trail = [];
+    this.PK.fill(0);
     this.kinds.forEach(function (k, ki) {
       [0, 1].forEach(function (s) {
         if (s && !g) return;
@@ -108,16 +110,16 @@
 
   /* two solid particles that touch push apart, and each turns away. Each keeps its own speed. */
   Sim.prototype.collide = function () {
-    var n = this.N, X = this.X, Y = this.Y, VX = this.VX, VY = this.VY, TR = this.TR, K = this.K, RK = this.RK, g = this.gate;
+    var n = this.N, X = this.X, Y = this.Y, VX = this.VX, VY = this.VY, TR = this.TR, K = this.K, RK = this.RK, g = this.gate, PK = this.PK;
     var cs = this.cs, cols = this.cols, rows = this.rows, head = this.head, next = this.next, w = this.w, h = this.h, m = 3, i;
     head.fill(-1);
     for (i = 0; i < n; i++) {
-      if (TR[i] || !RK[K[i]]) continue;
+      if (TR[i] || !RK[K[i]] || PK[i]) continue;
       var id = Math.max(0, Math.min(cols - 1, Math.floor(X[i] / cs))) + Math.max(0, Math.min(rows - 1, Math.floor(Y[i] / cs))) * cols;
       next[i] = head[id]; head[id] = i;
     }
     for (i = 0; i < n; i++) {
-      if (TR[i] || !RK[K[i]]) continue;
+      if (TR[i] || !RK[K[i]] || PK[i]) continue;
       var ci = Math.max(0, Math.min(cols - 1, Math.floor(X[i] / cs))), cj = Math.max(0, Math.min(rows - 1, Math.floor(Y[i] / cs)));
       for (var b = Math.max(0, cj - 1); b <= Math.min(rows - 1, cj + 1); b++) {
         for (var a = Math.max(0, ci - 1); a <= Math.min(cols - 1, ci + 1); a++) {
@@ -137,7 +139,7 @@
     }
     /* a push never carries a particle out of the box or through the wall */
     for (i = 0; i < n; i++) {
-      if (TR[i]) continue;
+      if (TR[i] || PK[i]) continue;
       if (Y[i] < m) Y[i] = m; else if (Y[i] > h - m) Y[i] = h - m;
       if (X[i] < m) X[i] = m; else if (X[i] > w - m) X[i] = w - m;
       if (g && !(g.thin && g.blocks && !g.blocks(Y[i]))) { var gL = g.x - g.hw, gR = g.x + g.hw; if (X[i] < g.x) { if (X[i] > gL) X[i] = gL; } else if (X[i] < gR) X[i] = gR; }
@@ -148,6 +150,26 @@
   Sim.prototype.laneRoom = function (line, dir, gap) {
     var g = this.gate, ex = dir > 0 ? g.x - g.hw : g.x + g.hw;
     for (var i = 0; i < this.N; i++) if (this.TR[i] && this.LN[i] === line && (this.TR[i] !== dir || Math.abs(this.X[i] - ex) < gap)) return false;
+    return true;
+  };
+
+  /* A particle taken out of the picture, into the rest of a volume too large to draw, and one put back at the far edge of a
+     side. A bag that swells by osmosis holds the same sucrose in more water: fewer sucrose molecules are in a close-up of its
+     wall, and more water molecules (the Membrane Lab's tubing, Daniel, 28 Nov 2026: "make sure that the models are correct").
+     A parked particle does not move, hit or count. */
+  Sim.prototype.park = function (i) {
+    if (this.PK[i] || this.TR[i]) return false;
+    var g = this.gate, s = g && this.X[i] >= g.x ? 1 : 0;
+    this.PK[i] = 1; this.side[this.K[i]][s]--;
+    return true;
+  };
+  Sim.prototype.unpark = function (i, s) {
+    if (!this.PK[i]) return false;
+    var m = 4, a = this.r() * TAU;
+    this.PK[i] = 0; this.TR[i] = 0;
+    this.X[i] = s ? this.w - m - 1 : m + 1; this.Y[i] = m + this.r() * (this.h - 2 * m);
+    this.VX[i] = (s ? -1 : 1) * Math.abs(Math.cos(a)); this.VY[i] = Math.sin(a);
+    this.side[this.K[i]][s]++;
     return true;
   };
 
@@ -162,6 +184,7 @@
     var r = this.r, g = this.gate, w = this.w, h = this.h, heat = this.heat, m = 3;
     if (g && g.thin) { this.S0 = this.S0 || new Uint8Array(this.N); for (var q0 = 0; q0 < this.N; q0++) this.S0[q0] = this.X[q0] < g.x ? 0 : 1; }
     for (var i = 0; i < this.N; i++) {
+      if (this.PK[i]) continue;
       var ki = this.K[i], k = this.kinds[ki], sp = k.speed * heat;
       this.A[i] += this.SP[i] * DT * Math.max(.6, heat);
       if (this.TR[i]) {
